@@ -1,4 +1,0 @@
-accelerate
-transformers
-peft
-autoawq
