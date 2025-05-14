@@ -12,8 +12,6 @@ REM You may need to insyall microsoft c++ build tools (from visual studio, may b
 
 "%venv_dir%\Scripts\python" -m pip --require-virtualenv install --upgrade pip
 "%venv_dir%\Scripts\python" -m pip --require-virtualenv install --upgrade -r "%script_dir%requirements.txt"
-
-REM TODO
-REM "%venv_dir%\Scripts\python" -m pip --require-virtualenv install --upgrade torch torchvision torchaudio --index-url=https://download.pytorch.org/whl/cu124
+"%venv_dir%\Scripts\python" -m pip --require-virtualenv install --upgrade torch torchvision torchaudio --index-url=https://download.pytorch.org/whl/cu128
 
 endlocal
