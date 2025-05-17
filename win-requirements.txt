@@ -1,0 +1,8 @@
+torch==2.6.0+cu124
+torchvision==0.21.0+cu124
+torchaudio==2.6.0+cu124
+triton-windows==3.2.0.post19
+llguidance
+xformers
+xgrammar
+https://github.com/SystemPanic/vllm-windows/releases/download/v0.8.5/vllm-0.8.5+cu124-cp312-cp312-win_amd64.whl
