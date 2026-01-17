@@ -173,9 +173,11 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-# Perpetual dir
-.perpetual/
-task.md
-
 # Local python distribution
 py_dist/
+
+# Perpetual
+/.perpetual/*
+!/.perpetual/description.md
+/task.md
+/question.md
