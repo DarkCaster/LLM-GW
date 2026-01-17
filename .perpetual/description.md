@@ -9,6 +9,8 @@ It intercepts incoming inference request (like /v1/chat/completions), tokenize t
 
 Configuration performed via lua config files using `python-lua-helper` package. See example.cfg.lua for current configuration structure. Main config parameters defined at `server` and `models` table.
 
+`ConfigLoader` sub-package will parse and load lua configuration via python-lua-helper, making `server` and `model` tables available in the python application by use of helper `PyLuaHelper` class. All validation performed at lua side on configuration load time, so you not needed to re-validate configuration values at python code.
+
 ### Typical Workflow (simplified)
 
 LLM gateway selects particular LLM engine and its configuration variant by incoming-request contents depending on model name and context size requirements. If new engine and configuration differs - it shuting down currently running engine and spawn a new engine with new configuration. Then it waits while engine http-entrypoint become available and then if forward incoming request to engine entrypoint and stream back the response with http error code.
