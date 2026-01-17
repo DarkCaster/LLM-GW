@@ -20,3 +20,111 @@ NOTES:
 - Main configuration unit is a model with unique name. LLM engine type with corresponding parameters and different confioguration variants tied to the model name.
 - When forwarding request to the running engine, some request json fields may be changed on the fly for request and/or response to match particular LLM engine format.
 - For the `llama.cpp` engine type, if there is already running engine instance present it can be used for pre-tokenization call to estimate context size requirements, and after that engine may be restarted with a more suitable configuration.
+
+### Accessing lua configuration from python
+
+Here is a trimmed down source code of `PyLuaHelper` class from `python-lua-helper` library for reference how to access configuration via `cfg` property from `ConfigLoader` helper class.
+
+```py3
+class PyLuaHelper:
+    """
+    Python helper for loading Lua configuration files by running them with Lua interpreter and exporting requested tables to Python dictionaries.
+    """
+
+    # Initialization code was removed, methods for accessing values from exported lua tables provided below:
+
+    def __getitem__(self, key: str) -> str:
+        """Get item from exported variables dictionary."""
+        return self._variables.get(key, "")
+
+    def __contains__(self, key: str) -> bool:
+        """Check if variable is available."""
+        return key in self._metadata and self._metadata[key] != ""
+
+    def __iter__(self):
+        """Iterate over exported variable names."""
+        return iter(self._variables)
+
+    def __len__(self) -> int:
+        """Get number of exported variables."""
+        return len(self._variables)
+
+    def keys(self) -> List[str]:
+        """Get list of exported variable names."""
+        return list(self._variables.keys())
+
+    def values(self) -> List[str]:
+        """Get list of exported variable values."""
+        return list(self._variables.values())
+
+    def items(self) -> List[tuple]:
+        """Get list of (name, value) tuples."""
+        return list(self._variables.items())
+
+    def is_table(self, key: str) -> bool:
+        """Check variable is a table, return true or false"""
+        # code trimmed down
+
+    def get_type(self, key: str) -> str:
+        """Get variable type"""
+        if self.is_table(key):
+            return "table"
+        if key in self._metadata and re.match(r"^string.*", self._metadata[key]):
+            return "string"
+        return self._metadata.get(key, "none")
+
+    def get(self, key: str, default: str = None) -> str:
+        """Get variable value with default."""
+        # cannot get value of table directly, so, return default
+        if self.is_table(key):
+            return default
+        return self._variables.get(key, default)
+
+    def get_int(self, key: str, default: int = None) -> int:
+        """Get variable value as integer with defaults on type conversion error."""
+        # code trimmed down
+
+    def get_float(self, key: str, default: float = None) -> float:
+        """Get variable value as float with defaults on type conversion error."""
+        # code trimmed down
+
+    def get_bool(self, key: str, default: bool = None) -> bool:
+        """Get variable value as bool with defaults on type conversion error."""
+        # code trimmed down
+
+    def get_list(self, key: str) -> List:
+        """Get indexed elements of table as list of strings if variable is a table and indexed (keyless) elements present, empty list if no elements present or variable is not a table"""
+        result = []
+        for i in self.get_table_seq(key):
+            result.append(self.get(f"{key}.{i}"))
+        return result
+
+    def get_table_start(self, key: str) -> int:
+        """Get start indexed element index of table if variable is a table and indexed (keyless) elements present, 0 if no indexed elements present"""
+        # code trimmed down
+
+    def get_table_end(self, key: str) -> int:
+        """Get end position of table if variable is a table, last indexable element is less than this number"""
+        # code trimmed down
+
+    def get_table_seq(self, key: str) -> List[int]:
+        """Get sequence of table indices if variable is a table with indexed elements, intended to be used in for loops"""
+        # code trimmed down
+
+    def __repr__(self) -> str:
+        """String representation."""
+        return f"PyLuaHelper({len(self._variables)} variables)"
+
+    def __str__(self) -> str:
+        """String representation."""
+        return f"PyLuaHelper with {len(self._variables)} exported variables"
+```
+
+Some examples, how to use `cfg` object:
+
+```py3
+cfg.get('server.listen_v4') # return "127.0.0.1:7777" string
+cfg.get_type('server') # return "table" result
+cfg.get_type('server.listen_v4') # return "string" result
+cfg.get('server.listen_xxx','NOT FOUND') # return "NOT FOUND" string
+```
