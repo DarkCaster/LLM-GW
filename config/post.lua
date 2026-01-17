@@ -83,13 +83,20 @@ if #models == 0 then
 end
 
 -- Check each model in the models table
+-- Track model names to ensure uniqueness
+local seen_names = {}
 for i, model in ipairs(models) do
 	local base_path = string.format("models[%d]", i)
 	assert_type(model, "table", base_path)
 	-- Check name field in model table
 	assert_exists(model.name, base_path..".name")
 	assert_type(model.name, "string", base_path..".name")
-	-- Try to find model name by searching in global scope
+	-- Check for duplicate model names
+	if seen_names[model.name] then
+		error(string.format("Configuration error: duplicate model name '%s' found. Model names must be unique.", model.name))
+	end
+	seen_names[model.name] = true
+	-- Try to find model table name by searching in global scope
 	local model_name = nil
 	for name, value in pairs(_G) do
 		if value == model and name ~= "models" and type(name) == "string" then
