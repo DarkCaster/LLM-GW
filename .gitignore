@@ -180,5 +180,6 @@ py_dist/
 /.perpetual/*
 !/.perpetual/description.md
 /task.md
+/*.task.md
 /question.md
 /answer.md
