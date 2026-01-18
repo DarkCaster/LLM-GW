@@ -106,6 +106,7 @@ You need to implement `server/` sub-package classes accorting to the plan below.
 **Purpose:** Expose public API of the server package.
 
 **Implementation Details:**
+
 - Import and expose:
   - `GatewayServer` (main server class)
   - `RequestHandler` (for testing)
