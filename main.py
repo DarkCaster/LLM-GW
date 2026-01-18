@@ -2,10 +2,12 @@ import argparse
 import os
 import sys
 import shutil
+import logging
 from pathlib import Path
 
 # imports from my subpackages
 import config
+from utils.logger import setup_logging, get_logger
 
 
 def main():
@@ -15,29 +17,33 @@ def main():
     parser.add_argument("-c", "--config", required=True, help="Lua configuration file")
     args = parser.parse_args()
 
+    # Setup logging initially with default level
+    setup_logging()
+    logger = get_logger(__name__)
+
     # Load configuration
     try:
         config_loader = config.ConfigLoader(args.config)
         cfg = config_loader.cfg
         temp_dir = config_loader.temp_dir
-        print(f"Using temp directory: {temp_dir}")
+        logger.info(f"Using temp directory: {temp_dir}")
     except Exception as e:
-        print(f"Failed to load configuration: {e}")
+        logger.error(f"Failed to load configuration: {e}")
         sys.exit(1)
 
     def temp_cleanup():
         if cfg.get_bool("profile.temp_cleanup", True):
-            print(f"Cleaning up temp dir {temp_dir}")
+            logger.info(f"Cleaning up temp dir {temp_dir}")
             shutil.rmtree(temp_dir, ignore_errors=True)
 
     try:
-        print("Starting LLM gateway")
-        # start server here and wait for interrrupt
+        logger.info("Starting LLM gateway")
+        # start server here and wait for interrupt
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        logger.error(f"Unexpected error: {e}")
         sys.exit(1)
     finally:
-        print("Stopping LLM gateway")
+        logger.info("Stopping LLM gateway")
         # add any server termination tasks here
         temp_cleanup()
 
