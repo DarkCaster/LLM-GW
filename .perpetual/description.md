@@ -62,9 +62,7 @@ Model selection and management logic.
   - Responsibilities:
     - Analyze request to determine context size needed
     - Use `engine/` subpackage to estimate context size requirements in tokens
-    - Select variant from model that satisfies context requirements
-    - Return selected variant configuration
-    - Handle variant selection strategy (for now only smallest sufficient context suitable for request + answer)
+    - Select variant from model that satisfies context requirements, command `EngineManager` to load engine with selected model
 
 ### Subpackage: `engine/`
 
