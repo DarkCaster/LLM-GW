@@ -43,17 +43,25 @@ class LlamaCppEngine(EngineClient):
             ValueError: If request format is invalid
         """
         try:
-            # Determine request type and build appropriate payload
-            endpoint = request_data.get("endpoint", "/v1/chat/completions")
-
-            if endpoint == "/v1/chat/completions":
+            # Determine request type based on content, not endpoint field
+            # since ModelSelector calls this without the endpoint field
+            if "messages" in request_data:
+                # This is a chat completions request
                 prompt_tokens = await self._estimate_chat_tokens(request_data)
-            elif endpoint == "/v1/completions":
+            elif "prompt" in request_data:
+                # This is a text completions request
                 prompt_tokens = await self._estimate_text_tokens(request_data)
             else:
-                raise ValueError(
-                    f"Unsupported endpoint for token estimation: {endpoint}"
-                )
+                # Try to use endpoint field if available (for backward compatibility)
+                endpoint = request_data.get("endpoint", "/v1/chat/completions")
+                if endpoint == "/v1/chat/completions":
+                    prompt_tokens = await self._estimate_chat_tokens(request_data)
+                elif endpoint == "/v1/completions":
+                    prompt_tokens = await self._estimate_text_tokens(request_data)
+                else:
+                    raise ValueError(
+                        f"Cannot determine request type for token estimation"
+                    )
 
             # Add max_tokens if present in request
             max_tokens = request_data.get("max_tokens", 0)
@@ -198,32 +206,60 @@ class LlamaCppEngine(EngineClient):
         # Check if this is a streaming response
         is_streaming = transformed.get("stream", False)
 
+        # Determine response type based on structure
+        # Chat completions have "message" field, text completions have "text" field
+        is_chat_completion = False
+        if "choices" in transformed and transformed["choices"]:
+            first_choice = transformed["choices"][0]
+            if "message" in first_choice:
+                is_chat_completion = True
+            elif "text" in first_choice:
+                is_chat_completion = False
+            else:
+                # Default to chat completion for backward compatibility
+                is_chat_completion = True
+
         if is_streaming:
             # For streaming responses, we need to transform each chunk
             # The basic structure is already OpenAI compatible
             # We'll just ensure required fields are present
             if "choices" in transformed and transformed["choices"]:
                 choice = transformed["choices"][0]
-                if "text" in choice and "content" not in choice:
+                if is_chat_completion and "text" in choice and "content" not in choice:
                     # Convert text to content for chat completions
-                    choice["content"] = choice.pop("text")
+                    choice["delta"] = {"content": choice.pop("text")}
+                elif (
+                    not is_chat_completion
+                    and "content" in choice
+                    and "text" not in choice
+                ):
+                    # Convert content to text for text completions
+                    choice["text"] = choice.pop("content")
         else:
             # For non-streaming responses, ensure the format matches OpenAI
             if "choices" in transformed and transformed["choices"]:
                 for choice in transformed["choices"]:
-                    # Ensure message structure for chat completions
-                    if "message" not in choice and "text" in choice:
-                        choice["message"] = {
-                            "role": "assistant",
-                            "content": choice.pop("text"),
-                        }
-                    elif "message" in choice and "content" not in choice["message"]:
-                        # Ensure content field exists
-                        choice["message"]["content"] = ""
+                    if is_chat_completion:
+                        # Ensure message structure for chat completions
+                        if "message" not in choice and "text" in choice:
+                            choice["message"] = {
+                                "role": "assistant",
+                                "content": choice.pop("text"),
+                            }
+                        elif "message" in choice and "content" not in choice["message"]:
+                            # Ensure content field exists
+                            choice["message"]["content"] = ""
+                    else:
+                        # Ensure text field for text completions
+                        if "text" not in choice and "content" in choice:
+                            choice["text"] = choice.pop("content")
 
         # Ensure required top-level fields
         if "object" not in transformed:
-            transformed["object"] = "chat.completion"
+            if is_chat_completion:
+                transformed["object"] = "chat.completion"
+            else:
+                transformed["object"] = "text_completion"
 
         self.logger.debug("Transformed response to OpenAI format")
         return transformed

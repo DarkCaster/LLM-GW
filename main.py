@@ -89,20 +89,10 @@ class LLMGateway:
             self.temp_dir = self.config_loader.temp_dir
             self.logger.info(f"Using temp directory: {self.temp_dir}")
 
-            # Initialize ModelSelector
-            self.model_selector = ModelSelector(self.cfg)
-            self.logger.info("ModelSelector initialized")
-
-            # Log available models
-            available_models = self.model_selector.list_models()
-            self.logger.info(f"Available models: {', '.join(available_models)}")
-
-            # Initialize EngineManager (singleton)
-            self.engine_manager = EngineManager()
-            self.logger.info("EngineManager initialized")
-
-            # Note: Server initialization will be implemented in Phase 3
-            self.logger.info("Server components will be initialized in Phase 3")
+            # Initialize GatewayServer (includes ModelSelector, EngineManager, and RequestHandler)
+            from server.gateway_server import GatewayServer
+            self.server = GatewayServer(self.cfg)
+            self.logger.info("GatewayServer initialized")
 
             return True
 
@@ -119,54 +109,28 @@ class LLMGateway:
         self.logger.info("LLM Gateway is ready")
 
         try:
-            # For now, just wait for shutdown signal
-            # In Phase 3, this will start the HTTP server
-            while not self.shutdown_requested:
-                await asyncio.sleep(1)
-
-                # Log status periodically
-                if (
-                    hasattr(self, "_last_status_log")
-                    and asyncio.get_event_loop().time() - self._last_status_log < 30
-                ):
-                    continue
-
-                # Get current engine state
-                if self.engine_manager:
-                    state = self.engine_manager.get_current_state()
-                    if state.get("engine_running"):
-                        self.logger.info(
-                            f"Current engine: {state.get('model_name', 'unknown')}, "
-                            f"PID: {state.get('pid', 'N/A')}, "
-                            f"uptime: {state.get('uptime', 0):.0f}s"
-                        )
-
-                self._last_status_log = asyncio.get_event_loop().time()
+            # Start the GatewayServer and run until shutdown signal received
+            await self.server.run()
 
         except KeyboardInterrupt:
             self.logger.info("Keyboard interrupt received")
-            self.shutdown_requested = True
         except Exception as e:
             self.logger.error(f"Unexpected error in main loop: {e}")
             return 1
 
-        await self.shutdown()
         return 0
 
     async def shutdown(self):
         """Gracefully shutdown all components."""
         self.logger.info("Shutting down LLM Gateway...")
 
-        # Stop EngineManager
-        if self.engine_manager:
+        # Stop GatewayServer (includes EngineManager shutdown)
+        if self.server:
             try:
-                await self.engine_manager.shutdown()
-                self.logger.info("EngineManager shutdown complete")
+                await self.server.stop()
+                self.logger.info("GatewayServer shutdown complete")
             except Exception as e:
-                self.logger.error(f"Error shutting down EngineManager: {e}")
-
-        # Note: Server shutdown will be implemented in Phase 3
-        self.logger.info("Server shutdown will be handled in Phase 3")
+                self.logger.error(f"Error shutting down GatewayServer: {e}")
 
         # Cleanup temp directory
         if self.temp_dir:
