@@ -44,7 +44,7 @@ You need to implement `models/` sub-package classes accorting to the plan below.
 
 **Dependencies:** `config.ConfigLoader`, `engine.EngineManager`, `typing`, `logging`
 
-**Why Sixth:** This implements the intelligence of variant selection. It requires the engine layer to be complete (for tokenization), but is independent of the HTTP server layer.
+**Why:** This implements the intelligence of variant selection. It requires the engine layer to be complete (for tokenization), but is independent of the HTTP server layer.
 
 ## Step 2: `models/__init__.py` - Models Package Interface
 

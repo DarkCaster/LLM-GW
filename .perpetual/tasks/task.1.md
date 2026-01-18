@@ -27,7 +27,7 @@ You need to implement `engine/` sub-package classes accorting to the plan below.
 
 **Dependencies:** `aiohttp`, `asyncio`, `logging`, `abc` (for abstract base class)
 
-**Why First:** This is the foundation for all engine communication. Having the abstract interface defined first allows us to implement concrete engines and test them independently.
+**Why:** This is the foundation for all engine communication. Having the abstract interface defined first allows us to implement concrete engines and test them independently.
 
 ## Step 2: `engine/llamacpp_engine.py` - LlamaCppEngine Class
 
@@ -66,7 +66,7 @@ You need to implement `engine/` sub-package classes accorting to the plan below.
 
 **Dependencies:** `engine_client.py`, `aiohttp`, `asyncio`, `json`, `logging`
 
-**Why Second:** This provides a concrete implementation we can test. We can verify the engine client pattern works before building the process management layer.
+**Why:** This provides a concrete implementation we can test. We can verify the engine client pattern works before building the process management layer.
 
 ## Step 3: `engine/engine_process.py` - EngineProcess Class
 
@@ -108,7 +108,7 @@ You need to implement `engine/` sub-package classes accorting to the plan below.
 
 **Dependencies:** `asyncio`, `asyncio.subprocess`, `logging`, `typing`, `signal`
 
-**Why Third:** Process management is the next layer. We can test spawning and controlling engine processes independently before integrating with the client layer.
+**Why:** Process management is the next layer. We can test spawning and controlling engine processes independently before integrating with the client layer.
 
 ## Step 4: `engine/engine_manager.py` - EngineManager Class
 
@@ -162,7 +162,7 @@ You need to implement `engine/` sub-package classes accorting to the plan below.
 
 **Dependencies:** `engine_process.py`, `engine_client.py`, `llamacpp_engine.py`, `asyncio`, `logging`, `typing`
 
-**Why Fourth:** This ties together process management and client communication. We can now test the full engine lifecycle: start, health check, stop, restart with different config.
+**Why:** This ties together process management and client communication. We can now test the full engine lifecycle: start, health check, stop, restart with different config.
 
 ## Step 5: `engine/__init__.py` - Engine Package Interface
 
@@ -178,4 +178,4 @@ You need to implement `engine/` sub-package classes accorting to the plan below.
 
 **Dependencies:** All engine package modules
 
-**Why Fifth:** Package initialization to provide clean import interface.
+**Why:** Package initialization to provide clean import interface.
