@@ -1,6 +1,6 @@
 # Implementing Phase 3: HTTP Server Layer (Top Layer)
 
-You need to implement `server/` sub-package classes accorting to the plan below. Also implement some tests if needed.
+You need to implement `server/` sub-package classes accorting to the plan below.
 
 ## Step 1: `server/request_handler.py` - RequestHandler Class
 
@@ -112,3 +112,32 @@ You need to implement `server/` sub-package classes accorting to the plan below.
 - Define `__all__` list
 
 **Dependencies:** All server package modules
+
+---
+
+# Implementing Phase 4: Integration and Main Entry Point
+
+## Step 1: Update `main.py` - Application Entry Point
+
+**Purpose:** Wire everything together and provide command-line interface.
+
+**Implementation Details:**
+
+- Modify existing `main()` function:
+  - After loading configuration, create `GatewayServer(cfg)`
+  - Replace placeholder comment `# start server here and wait for interrupt` with:
+    - `await server.run()`
+  - Make `main()` async: `async def main():`
+  - Add proper signal handling for graceful shutdown (SIGINT, SIGTERM)
+  - In finally block:
+    - Call `await server.stop()` before cleanup
+  - Handle asyncio properly:
+    - If script run directly, use `asyncio.run(main())`
+- Add signal handlers:
+  - Register handlers for SIGINT and SIGTERM
+  - Set flag to trigger graceful shutdown
+  - Server should detect flag and stop gracefully
+
+**Dependencies:** `asyncio`, `signal`, `server.GatewayServer`
+
+**Why:** Final integration step that creates a runnable application.

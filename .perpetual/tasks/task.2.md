@@ -1,6 +1,6 @@
 # Implementing Phase 2: Model Selection Logic (Middle Layer)
 
-You need to implement `models/` sub-package classes accorting to the plan below. Also implement some tests if needed.
+You need to implement `models/` sub-package classes accorting to the plan below.
 
 ## Step 1: `models/model_selector.py` - ModelSelector Class
 

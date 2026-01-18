@@ -1,6 +1,6 @@
 # Implementing Phase 1 of application: Engine Management Foundation (Bottom Layer)
 
-You need to implement `engine/` sub-package classes accorting to the plan below. Also implement some tests if needed.
+You need to implement `engine/` sub-package classes accorting to the plan below.
 
 ## Step 1: `engine/engine_client.py` - Base EngineClient Class
 
