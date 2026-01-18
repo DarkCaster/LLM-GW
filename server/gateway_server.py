@@ -1,6 +1,7 @@
 # server/gateway_server.py
 
 import asyncio
+import sys
 from aiohttp import web
 from typing import Optional, List, Tuple
 from utils.logger import get_logger
@@ -72,9 +73,15 @@ class GatewayServer:
         if self.listen_v4 and self.listen_v4.lower() != "none":
             try:
                 host, port = self._parse_listen_address(self.listen_v4)
-                site = web.TCPSite(
-                    runner, host, port, reuse_address=True, reuse_port=True
-                )
+                # Disable reuse_port on Windows as it's not supported
+                if sys.platform == "win32":
+                    site = web.TCPSite(
+                        runner, host, port, reuse_address=True
+                    )
+                else:
+                    site = web.TCPSite(
+                        runner, host, port, reuse_address=True, reuse_port=True
+                    )
                 await site.start()
                 self.sites.append(site)
                 self.logger.info(f"Listening on IPv4: {host}:{port}")
@@ -88,9 +95,15 @@ class GatewayServer:
         if self.listen_v6 and self.listen_v6.lower() != "none":
             try:
                 host, port = self._parse_listen_address(self.listen_v6)
-                site = web.TCPSite(
-                    runner, host, port, reuse_address=True, reuse_port=True
-                )
+                # Disable reuse_port on Windows as it's not supported
+                if sys.platform == "win32":
+                    site = web.TCPSite(
+                        runner, host, port, reuse_address=True
+                    )
+                else:
+                    site = web.TCPSite(
+                        runner, host, port, reuse_address=True, reuse_port=True
+                    )
                 await site.start()
                 self.sites.append(site)
                 self.logger.info(f"Listening on IPv6: {host}:{port}")
