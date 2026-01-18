@@ -75,13 +75,14 @@ Engine lifecycle management and interaction.
   - Responsibilities:
     - Track currently running engine (if any)
     - Stop/kill running engine
-    - Start engine with selected variant configuration
+    - Start engine for selected configuration: model name and variant
     - Monitor engine process health
-    - Wait for engine HTTP endpoint to become available after start
-    - Coordinate engine state changes
+    - Wait for engine to become available after start (using health check)
+    - Provide access to `EngineClient` for working with engine
+    - Provide access for currently running engine properties
 
 - `EngineProcess`
-  - Purpose: Wrapper for a single running engine process
+  - Purpose: Wrapper for a running engine process, managed by `EngineManager`
   - Responsibilities:
     - Spawn subprocess with configured binary and arguments
     - Monitor process status (running, stopped, crashed)
@@ -90,21 +91,18 @@ Engine lifecycle management and interaction.
     - Provide process information (PID, status, etc.)
 
 - `EngineClient` (base class)
-  - Purpose: HTTP client for communicating with running engine
-  - Responsibilities:
+  - Purpose: HTTP proxy for communicating with running engine
+  - Responsibilities of classes implementing this base class:
     - Forward requests to engine HTTP endpoint with transformation (if needed)
-    - Handle request transformation if needed (modify JSON fields for specific engines)
-    - Handle response transformation if needed
     - Stream responses back
-    - Perform health checks (check if endpoint is available)
     - Define method for token estimation
+    - Define method for health check
 
 - `LlamaCppEngine` (specific implementation of `EngineClient`)
   - Purpose: Llama.cpp-specific engine handling
   - Responsibilities:
     - Implement llama.cpp-specific request/response transformations, return http error on unsuported request-types
     - Implement token estimation method: call llama.cpp tokenization endpoint, calculate and return total tokens from chat history + max_tokens if present
-    - Parse llama.cpp specific responses
 
 ### Subpackage: `utils/`
 
