@@ -138,6 +138,8 @@ Project using following external python packages:
 
 Here is a trimmed down source code of `PyLuaHelper` class from `python-lua-helper` library for reference how to access configuration via `cfg` property from `ConfigLoader` helper class.
 
+**IMPORTANT:** when writing python code, consider to skip adding any additional config format validation into python code. Lua config is validated on load by `PyLuaHelper`. If you need to validate config parameters that is not a runtime check - add lua validation logic into `post.lua` lua script.
+
 ```py3
 class PyLuaHelper:
     """
