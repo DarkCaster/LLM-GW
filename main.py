@@ -1,27 +1,16 @@
 import argparse
+import os
 import sys
 import shutil
-import asyncio
-import signal
+import logging
+from pathlib import Path
 
 # imports from my subpackages
 import config
 from utils.logger import setup_logging, get_logger
-from server import GatewayServer
 
 
-# Global flag for graceful shutdown
-shutdown_event = asyncio.Event()
-
-
-def signal_handler(signum, frame):
-    """Handle shutdown signals."""
-    logger = get_logger(__name__)
-    logger.info(f"Received signal {signum}, initiating graceful shutdown...")
-    shutdown_event.set()
-
-
-async def main():
+def main():
     parser = argparse.ArgumentParser(
         description="Run LLM-Gateway, manage LLM engines on demand per request"
     )
@@ -47,46 +36,17 @@ async def main():
             logger.info(f"Cleaning up temp dir {temp_dir}")
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-    # Create gateway server
-    server = None
-
     try:
         logger.info("Starting LLM gateway")
-
-        # Initialize server
-        server = GatewayServer(cfg)
-
-        # Start server (this will set up listeners)
-        await server.start()
-
-        # Wait for shutdown signal
-        logger.info("Server is running. Press Ctrl+C to stop.")
-        await shutdown_event.wait()
-
-    except KeyboardInterrupt:
-        logger.info("Received keyboard interrupt")
+        # start server here and wait for interrupt
     except Exception as e:
-        logger.error(f"Unexpected error: {e}", exc_info=True)
+        logger.error(f"Unexpected error: {e}")
         sys.exit(1)
     finally:
         logger.info("Stopping LLM gateway")
-        # Stop server if it was created
-        if server:
-            try:
-                await server.stop()
-            except Exception as e:
-                logger.error(f"Error stopping server: {e}")
+        # add any server termination tasks here
         temp_cleanup()
 
 
 if __name__ == "__main__":
-    # Register signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    # Run the async main function
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        # Already handled in main()
-        pass
+    main()

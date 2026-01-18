@@ -1,7 +1,6 @@
 import unittest
 import logging
 import io
-import sys
 from unittest.mock import patch
 from utils.logger import setup_logging, get_logger
 
