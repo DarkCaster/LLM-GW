@@ -108,6 +108,18 @@ Engine lifecycle management and interaction.
     - Implement token estimation method: call llama.cpp tokenization endpoint, calculate and return total tokens from chat history + max_tokens if present
     - Parse llama.cpp specific responses
 
+### Subpackage: `utils/`
+
+Utility functions and helpers.
+
+**Classes/Modules:**
+
+- `logger.py`
+  - Purpose: Logging configuration and utilities
+  - Functions:
+    - Setup logging with appropriate formats
+    - Provide logger instances for different modules
+
 ## Bundled Python Packages
 
 Consider using following internal python packages:
