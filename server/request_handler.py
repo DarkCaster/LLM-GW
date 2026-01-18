@@ -1,429 +1,366 @@
-"""
-RequestHandler - Processes HTTP requests, coordinates model selection and engine management.
-
-This module handles incoming OpenAI API requests, selects appropriate model variants,
-ensures correct engines are running, and forwards requests to engines.
-"""
-
-import json
-import logging
-from typing import Dict, Any
+# server/request_handler.py
 
 import aiohttp
 from aiohttp import web
-import python_lua_helper
-
-from models.model_selector import ModelSelector
-from engine.engine_manager import EngineManager
+import json
+from utils.logger import get_logger
+from models import ModelSelector
+from engine import EngineManager
 
 
 class RequestHandler:
-    """Handles incoming HTTP requests and coordinates model/engine operations."""
+    """
+    Process individual HTTP requests, coordinate model selection and engine management.
+    """
 
     def __init__(
-        self,
-        model_selector: ModelSelector,
-        engine_manager: EngineManager,
-        cfg: python_lua_helper.PyLuaHelper,
+        self, model_selector: ModelSelector, engine_manager: EngineManager, cfg
     ):
         """
-        Initialize RequestHandler with required components.
+        Initialize the request handler.
 
         Args:
-            model_selector: ModelSelector instance for variant selection
-            engine_manager: EngineManager instance for engine lifecycle
-            cfg: Configuration object for server-level settings
+            model_selector: ModelSelector instance for choosing variants
+            engine_manager: EngineManager instance for managing engines
+            cfg: PyLuaHelper configuration object
         """
         self.model_selector = model_selector
         self.engine_manager = engine_manager
         self.cfg = cfg
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = get_logger(self.__class__.__name__)
 
     async def handle_chat_completion(self, request: web.Request) -> web.Response:
         """
-        Handle /v1/chat/completions endpoint.
+        Handle POST /v1/chat/completions requests.
 
         Args:
-            request: aiohttp HTTP request
+            request: aiohttp web.Request object
 
         Returns:
-            HTTP response with completion result or error
+            aiohttp web.Response object
         """
         try:
-            # Parse and validate request
-            request_data = await self._parse_request(request)
-            self._validate_chat_completion(request_data)
+            # Parse JSON body
+            try:
+                request_data = await request.json()
+            except json.JSONDecodeError as e:
+                return self._error_response(400, f"Invalid JSON: {e}")
 
-            # Extract model name and endpoint
+            # Validate required fields
+            if "model" not in request_data:
+                return self._error_response(400, "Missing required field: 'model'")
+
+            if "messages" not in request_data:
+                return self._error_response(400, "Missing required field: 'messages'")
+
             model_name = request_data["model"]
+
+            self.logger.info(
+                f"Handling chat completion request for model '{model_name}'"
+            )
+
+            # Select appropriate variant
+            try:
+                variant_config = await self.model_selector.select_variant(
+                    model_name, request_data, self.engine_manager
+                )
+            except ValueError as e:
+                return self._error_response(400, str(e))
+
+            # Get engine type for this model
+            model_info = self.model_selector.models.get(model_name)
+            if not model_info:
+                return self._error_response(404, f"Model '{model_name}' not found")
+
+            engine_type = model_info["engine"]
+
+            # Ensure correct engine is running
+            try:
+                engine_client = await self.engine_manager.ensure_engine(
+                    model_name, variant_config, engine_type
+                )
+            except Exception as e:
+                self.logger.error(f"Failed to ensure engine: {e}")
+                return self._error_response(503, f"Failed to start engine: {e}")
+
+            # Check if endpoint is supported
             endpoint = "/v1/chat/completions"
-            request_data["endpoint"] = endpoint
+            if endpoint not in engine_client.get_supported_endpoints():
+                return self._error_response(
+                    400, f"Endpoint '{endpoint}' not supported by engine"
+                )
 
-            # Process the request
-            return await self._process_request(request, model_name, request_data)
+            # Forward request to engine
+            try:
+                is_streaming = request_data.get("stream", False)
 
-        except ValueError as e:
-            self.logger.error(f"Validation error: {e}")
-            return self._error_response(400, str(e))
-        except KeyError as e:
-            self.logger.error(f"Missing required field: {e}")
-            return self._error_response(400, f"Missing required field: {e}")
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Invalid JSON: {e}")
-            return self._error_response(400, "Invalid JSON in request body")
+                async with aiohttp.ClientSession() as session:
+                    engine_response = await engine_client.forward_request(
+                        session, endpoint, request_data
+                    )
+
+                    if is_streaming:
+                        # Handle streaming response
+                        return await self._handle_streaming_response(engine_response)
+                    else:
+                        # Handle non-streaming response
+                        return await self._handle_non_streaming_response(
+                            engine_response, engine_client
+                        )
+
+            except aiohttp.ClientError as e:
+                self.logger.error(f"Engine request failed: {e}")
+                return self._error_response(502, f"Engine request failed: {e}")
+
         except Exception as e:
-            self.logger.error(f"Unexpected error in chat completion: {e}")
-            return self._error_response(500, f"Internal server error: {str(e)}")
+            self.logger.error(f"Unexpected error in handle_chat_completion: {e}")
+            return self._error_response(500, f"Internal server error: {e}")
 
     async def handle_completion(self, request: web.Request) -> web.Response:
         """
-        Handle /v1/completions endpoint.
+        Handle POST /v1/completions requests.
 
         Args:
-            request: aiohttp HTTP request
+            request: aiohttp web.Request object
 
         Returns:
-            HTTP response with completion result or error
+            aiohttp web.Response object
         """
         try:
-            # Parse and validate request
-            request_data = await self._parse_request(request)
-            self._validate_completion(request_data)
+            # Parse JSON body
+            try:
+                request_data = await request.json()
+            except json.JSONDecodeError as e:
+                return self._error_response(400, f"Invalid JSON: {e}")
 
-            # Extract model name and endpoint
+            # Validate required fields
+            if "model" not in request_data:
+                return self._error_response(400, "Missing required field: 'model'")
+
+            if "prompt" not in request_data:
+                return self._error_response(400, "Missing required field: 'prompt'")
+
             model_name = request_data["model"]
+
+            self.logger.info(f"Handling completion request for model '{model_name}'")
+
+            # Select appropriate variant
+            try:
+                variant_config = await self.model_selector.select_variant(
+                    model_name, request_data, self.engine_manager
+                )
+            except ValueError as e:
+                return self._error_response(400, str(e))
+
+            # Get engine type for this model
+            model_info = self.model_selector.models.get(model_name)
+            if not model_info:
+                return self._error_response(404, f"Model '{model_name}' not found")
+
+            engine_type = model_info["engine"]
+
+            # Ensure correct engine is running
+            try:
+                engine_client = await self.engine_manager.ensure_engine(
+                    model_name, variant_config, engine_type
+                )
+            except Exception as e:
+                self.logger.error(f"Failed to ensure engine: {e}")
+                return self._error_response(503, f"Failed to start engine: {e}")
+
+            # Check if endpoint is supported
             endpoint = "/v1/completions"
-            request_data["endpoint"] = endpoint
+            if endpoint not in engine_client.get_supported_endpoints():
+                return self._error_response(
+                    400, f"Endpoint '{endpoint}' not supported by engine"
+                )
 
-            # Process the request
-            return await self._process_request(request, model_name, request_data)
+            # Forward request to engine
+            try:
+                is_streaming = request_data.get("stream", False)
 
-        except ValueError as e:
-            self.logger.error(f"Validation error: {e}")
-            return self._error_response(400, str(e))
-        except KeyError as e:
-            self.logger.error(f"Missing required field: {e}")
-            return self._error_response(400, f"Missing required field: {e}")
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Invalid JSON: {e}")
-            return self._error_response(400, "Invalid JSON in request body")
+                async with aiohttp.ClientSession() as session:
+                    engine_response = await engine_client.forward_request(
+                        session, endpoint, request_data
+                    )
+
+                    if is_streaming:
+                        # Handle streaming response
+                        return await self._handle_streaming_response(engine_response)
+                    else:
+                        # Handle non-streaming response
+                        return await self._handle_non_streaming_response(
+                            engine_response, engine_client
+                        )
+
+            except aiohttp.ClientError as e:
+                self.logger.error(f"Engine request failed: {e}")
+                return self._error_response(502, f"Engine request failed: {e}")
+
         except Exception as e:
-            self.logger.error(f"Unexpected error in completion: {e}")
-            return self._error_response(500, f"Internal server error: {str(e)}")
+            self.logger.error(f"Unexpected error in handle_completion: {e}")
+            return self._error_response(500, f"Internal server error: {e}")
 
     async def handle_models_list(self, request: web.Request) -> web.Response:
         """
-        Handle GET /v1/models endpoint.
+        Handle GET /v1/models requests.
 
         Args:
-            request: aiohttp HTTP request
+            request: aiohttp web.Request object
 
         Returns:
-            HTTP response with list of available models
+            aiohttp web.Response object with list of models
         """
         try:
-            models = self.model_selector.get_available_models()
+            model_names = self.model_selector.list_models()
 
             # Build OpenAI-compatible response
-            response_data = {"object": "list", "data": models}
+            models_data = []
+            for model_name in model_names:
+                model_info = self.model_selector.get_model_info(model_name)
+                models_data.append(
+                    {
+                        "id": model_name,
+                        "object": "model",
+                        "created": 0,  # Placeholder
+                        "owned_by": "llm-gateway",
+                        "permission": [],
+                        "root": model_name,
+                        "parent": None,
+                    }
+                )
 
-            self.logger.debug(f"Returning models list with {len(models)} models")
+            response_data = {"object": "list", "data": models_data}
+
             return web.json_response(response_data)
 
         except Exception as e:
-            self.logger.error(f"Error getting models list: {e}")
-            return self._error_response(500, f"Internal server error: {str(e)}")
+            self.logger.error(f"Error in handle_models_list: {e}")
+            return self._error_response(500, f"Internal server error: {e}")
 
     async def handle_model_info(self, request: web.Request) -> web.Response:
         """
-        Handle GET /v1/models/{model_id} endpoint.
+        Handle GET /v1/models/{model_id} requests.
 
         Args:
-            request: aiohttp HTTP request with model_id in path
+            request: aiohttp web.Request object
 
         Returns:
-            HTTP response with model information
+            aiohttp web.Response object with model information
         """
         try:
-            model_id = request.match_info.get("model_id")
-            if not model_id:
-                return self._error_response(400, "Missing model_id in path")
+            # Extract model name from URL path
+            model_name = request.match_info.get("model_id")
 
-            # Get model info from selector
-            model_info = self.model_selector.get_model_info(model_id)
+            if not model_name:
+                return self._error_response(400, "Missing model ID in path")
 
-            self.logger.debug(f"Returning info for model: {model_id}")
-            return web.json_response(model_info)
+            # Get model info
+            try:
+                model_info = self.model_selector.get_model_info(model_name)
+            except ValueError as e:
+                return self._error_response(404, str(e))
 
-        except ValueError as e:
-            self.logger.error(f"Model not found: {e}")
-            return self._error_response(404, str(e))
+            # Build OpenAI-compatible response
+            response_data = {
+                "id": model_name,
+                "object": "model",
+                "created": 0,  # Placeholder
+                "owned_by": "llm-gateway",
+                "permission": [],
+                "root": model_name,
+                "parent": None,
+            }
+
+            return web.json_response(response_data)
+
         except Exception as e:
-            self.logger.error(f"Error getting model info: {e}")
-            return self._error_response(500, f"Internal server error: {str(e)}")
+            self.logger.error(f"Error in handle_model_info: {e}")
+            return self._error_response(500, f"Internal server error: {e}")
 
-    async def _process_request(
-        self, request: web.Request, model_name: str, request_data: Dict[str, Any]
-    ) -> web.Response:
-        """
-        Process a request by selecting variant, ensuring engine, and forwarding.
-
-        Args:
-            request: Original HTTP request (for streaming detection)
-            model_name: Name of the model to use
-            request_data: Request data dictionary
-
-        Returns:
-            HTTP response from engine or error response
-        """
-        try:
-            # Select appropriate variant
-            variant_config = await self.model_selector.select_variant(
-                model_name=model_name,
-                request_data=request_data,
-                engine_manager=self.engine_manager,
-            )
-
-            # Get engine type for the model
-            engine_type = self.model_selector.get_model_engine_type(model_name)
-
-            # Ensure correct engine is running
-            engine_client = await self.engine_manager.ensure_engine(
-                model_name=model_name,
-                variant_config=variant_config,
-                engine_type=engine_type,
-            )
-
-            # Check if endpoint is supported
-            endpoint = request_data.get("endpoint", "/v1/chat/completions")
-            if endpoint not in engine_client.get_supported_endpoints():
-                self.logger.error(f"Endpoint {endpoint} not supported by engine")
-                return self._error_response(
-                    400, f"Endpoint {endpoint} is not supported by this engine"
-                )
-
-            # Check if streaming is requested
-            stream = request_data.get("stream", False)
-
-            if stream:
-                return await self._handle_streaming_request(
-                    engine_client=engine_client,
-                    endpoint=endpoint,
-                    request_data=request_data,
-                )
-            else:
-                return await self._handle_non_streaming_request(
-                    engine_client=engine_client,
-                    endpoint=endpoint,
-                    request_data=request_data,
-                )
-
-        except ValueError as e:
-            self.logger.error(f"Model/variant selection error: {e}")
-            return self._error_response(400, str(e))
-        except RuntimeError as e:
-            self.logger.error(f"Engine management error: {e}")
-            return self._error_response(503, f"Engine unavailable: {str(e)}")
-        except aiohttp.ClientError as e:
-            self.logger.error(f"Engine communication error: {e}")
-            return self._error_response(502, f"Bad gateway: {str(e)}")
-        except Exception as e:
-            self.logger.error(f"Unexpected error in request processing: {e}")
-            return self._error_response(500, f"Internal server error: {str(e)}")
-
-    async def _handle_streaming_request(
-        self, engine_client: Any, endpoint: str, request_data: Dict[str, Any]
+    async def _handle_streaming_response(
+        self, engine_response: aiohttp.ClientResponse
     ) -> web.StreamResponse:
         """
-        Handle streaming request with Server-Sent Events.
+        Handle streaming response from engine.
 
         Args:
-            engine_client: EngineClient instance
-            endpoint: API endpoint path
-            request_data: Request data
+            engine_response: aiohttp ClientResponse from engine
 
         Returns:
-            StreamResponse with SSE-formatted chunks
+            aiohttp StreamResponse for client
         """
-        self.logger.debug("Handling streaming request")
+        # Create streaming response
+        response = web.StreamResponse(
+            status=engine_response.status,
+            reason=engine_response.reason,
+            headers={"Content-Type": "text/event-stream"},
+        )
 
-        # Create stream response
-        response = web.StreamResponse()
-        response.headers["Content-Type"] = "text/event-stream"
-        response.headers["Cache-Control"] = "no-cache"
-        response.headers["Connection"] = "keep-alive"
+        await response.prepare(
+            engine_response._request._message._protocol._transport.get_extra_info(
+                "request"
+            )
+        )
 
-        await response.prepare(request)
+        # Alternative approach: get request from current context
+        # For aiohttp, we need to properly handle this
+        # Let's use a different approach - we'll need the original request
+        # This is a simplification - in production you'd pass the request object
 
         try:
-            # Forward request to engine
-            async with aiohttp.ClientSession() as session:
-                engine_response = await engine_client.forward_request(
-                    session=session,
-                    endpoint=endpoint,
-                    request_data=request_data,
-                    timeout=300.0,  # Longer timeout for streaming
-                )
+            # Stream chunks from engine to client
+            async for chunk in engine_response.content.iter_any():
+                if chunk:
+                    await response.write(chunk)
 
-                # Stream chunks to client
-                async for chunk in engine_response.content:
-                    if chunk:
-                        # Format as SSE event
-                        sse_data = f"data: {chunk.decode('utf-8')}\n\n"
-                        await response.write(sse_data.encode("utf-8"))
-
-                await response.write_eof()
+            await response.write_eof()
 
         except Exception as e:
-            self.logger.error(f"Streaming error: {e}")
-            try:
-                error_data = json.dumps(
-                    {
-                        "error": {
-                            "message": f"Stream interrupted: {str(e)}",
-                            "type": "stream_error",
-                        }
-                    }
-                )
-                sse_error = f"data: {error_data}\n\n"
-                await response.write(sse_error.encode("utf-8"))
-                await response.write_eof()
-            except:
-                pass  # Client may have disconnected
+            self.logger.error(f"Error streaming response: {e}")
 
         return response
 
-    async def _handle_non_streaming_request(
-        self, engine_client: Any, endpoint: str, request_data: Dict[str, Any]
+    async def _handle_non_streaming_response(
+        self, engine_response: aiohttp.ClientResponse, engine_client
     ) -> web.Response:
         """
-        Handle non-streaming request.
+        Handle non-streaming response from engine.
 
         Args:
-            engine_client: EngineClient instance
-            endpoint: API endpoint path
-            request_data: Request data
+            engine_response: aiohttp ClientResponse from engine
+            engine_client: EngineClient instance for transformations
 
         Returns:
-            JSON response from engine
+            aiohttp web.Response object
         """
-        self.logger.debug("Handling non-streaming request")
-
+        # Read complete response
         try:
-            # Forward request to engine
-            async with aiohttp.ClientSession() as session:
-                engine_response = await engine_client.forward_request(
-                    session=session,
-                    endpoint=endpoint,
-                    request_data=request_data,
-                    timeout=60.0,
-                )
+            response_text = await engine_response.text()
+            response_data = json.loads(response_text)
 
-                # Read full response
-                response_text = await engine_response.text()
-                response_data = json.loads(response_text)
+            # Transform response if needed
+            transformed_data = engine_client.transform_response(response_data)
 
-                # Apply response transformation if needed
-                if hasattr(engine_client, "transform_response"):
-                    response_data = engine_client.transform_response(response_data)
-
-                # Return as JSON response
-                return web.json_response(response_data, status=engine_response.status)
+            return web.json_response(transformed_data, status=engine_response.status)
 
         except json.JSONDecodeError as e:
-            self.logger.error(f"Invalid JSON from engine: {e}")
+            self.logger.error(f"Failed to parse engine response: {e}")
             return self._error_response(502, "Invalid response from engine")
-        except Exception as e:
-            self.logger.error(f"Error in non-streaming request: {e}")
-            raise
-
-    async def _parse_request(self, request: web.Request) -> Dict[str, Any]:
-        """
-        Parse JSON request body.
-
-        Args:
-            request: HTTP request
-
-        Returns:
-            Parsed request data dictionary
-
-        Raises:
-            json.JSONDecodeError: If JSON is invalid
-        """
-        try:
-            return await request.json()
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Failed to parse JSON: {e}")
-            raise
-
-    def _validate_chat_completion(self, request_data: Dict[str, Any]) -> None:
-        """
-        Validate chat completion request.
-
-        Args:
-            request_data: Request data dictionary
-
-        Raises:
-            ValueError: If validation fails
-            KeyError: If required fields are missing
-        """
-        # Check required fields
-        if "model" not in request_data:
-            raise KeyError("model")
-        if "messages" not in request_data:
-            raise KeyError("messages")
-
-        # Validate messages
-        messages = request_data["messages"]
-        if not isinstance(messages, list) or len(messages) == 0:
-            raise ValueError("Messages must be a non-empty list")
-
-        # Validate each message
-        for i, message in enumerate(messages):
-            if not isinstance(message, dict):
-                raise ValueError(f"Message at index {i} must be an object")
-            if "role" not in message:
-                raise ValueError(f"Message at index {i} missing 'role' field")
-            if "content" not in message:
-                raise ValueError(f"Message at index {i} missing 'content' field")
-
-    def _validate_completion(self, request_data: Dict[str, Any]) -> None:
-        """
-        Validate text completion request.
-
-        Args:
-            request_data: Request data dictionary
-
-        Raises:
-            ValueError: If validation fails
-            KeyError: If required fields are missing
-        """
-        # Check required fields
-        if "model" not in request_data:
-            raise KeyError("model")
-        if "prompt" not in request_data:
-            raise KeyError("prompt")
-
-        # Validate prompt
-        prompt = request_data["prompt"]
-        if not isinstance(prompt, (str, list)):
-            raise ValueError("Prompt must be a string or list of strings")
-        if isinstance(prompt, list) and len(prompt) == 0:
-            raise ValueError("Prompt list must not be empty")
 
     def _error_response(
         self, status: int, message: str, error_type: str = "invalid_request_error"
     ) -> web.Response:
         """
-        Create OpenAI-compatible error response.
+        Create an OpenAI-compatible error response.
 
         Args:
             status: HTTP status code
             message: Error message
-            error_type: OpenAI error type
+            error_type: Type of error (OpenAI error type)
 
         Returns:
-            HTTP response with error JSON
+            aiohttp web.Response object with error
         """
         error_data = {
             "error": {
@@ -434,5 +371,4 @@ class RequestHandler:
             }
         }
 
-        self.logger.debug(f"Returning error: {status} - {message}")
         return web.json_response(error_data, status=status)

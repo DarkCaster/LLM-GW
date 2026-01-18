@@ -1,310 +1,209 @@
-"""
-LlamaCppEngine - llama.cpp specific implementation of EngineClient.
+# engine/llamacpp_engine.py
 
-Provides llama.cpp specific token estimation, request transformation,
-and response transformation functionality.
-"""
-
-import asyncio
-import json
-import logging
-from typing import List, Optional
-
+from typing import List
 import aiohttp
-
 from .engine_client import EngineClient
 
 
 class LlamaCppEngine(EngineClient):
-    """Concrete implementation of EngineClient for llama.cpp engines."""
+    """
+    Concrete implementation of EngineClient for llama.cpp engines.
+    """
 
-    def __init__(self, base_url: str, logger: Optional[logging.Logger] = None):
+    def __init__(self, base_url: str):
         """
-        Initialize LlamaCppEngine with llama.cpp specific configuration.
+        Initialize the llama.cpp engine client.
 
         Args:
-            base_url: Base URL for llama.cpp HTTP endpoint
-            logger: Logger instance (uses class name if not provided)
+            base_url: Base URL for the llama.cpp server's HTTP endpoint
         """
-        super().__init__(base_url, logger)
+        super().__init__(base_url)
 
     async def estimate_tokens(self, request_data: dict) -> int:
         """
-        Calculate token requirements from incoming request for llama.cpp.
+        Calculate token requirements from incoming request using llama.cpp tokenization endpoint.
 
         Args:
-            request_data: Request data dictionary
+            request_data: The incoming request data dictionary
 
         Returns:
-            Estimated token count
+            Estimated number of tokens required for this request (prompt + max_tokens)
 
         Raises:
-            RuntimeError: If tokenization fails or engine is not available
-            ValueError: If request format is invalid
+            Exception: If token estimation fails
         """
         try:
-            # Determine request type based on content, not endpoint field
-            # since ModelSelector calls this without the endpoint field
-            if "messages" in request_data:
-                # This is a chat completions request
-                prompt_tokens = await self._estimate_chat_tokens(request_data)
-            elif "prompt" in request_data:
-                # This is a text completions request
-                prompt_tokens = await self._estimate_text_tokens(request_data)
+            # Determine request type and extract content for tokenization
+            is_chat = "messages" in request_data
+
+            if is_chat:
+                # Chat completions - extract messages
+                messages = request_data.get("messages", [])
+                # Build a simple text representation of the chat
+                # llama.cpp tokenize endpoint typically accepts a prompt string
+                text_parts = []
+                for msg in messages:
+                    role = msg.get("role", "")
+                    content = msg.get("content", "")
+                    text_parts.append(f"{role}: {content}")
+                prompt_text = "\n".join(text_parts)
             else:
-                # Try to use endpoint field if available (for backward compatibility)
-                endpoint = request_data.get("endpoint", "/v1/chat/completions")
-                if endpoint == "/v1/chat/completions":
-                    prompt_tokens = await self._estimate_chat_tokens(request_data)
-                elif endpoint == "/v1/completions":
-                    prompt_tokens = await self._estimate_text_tokens(request_data)
+                # Text completions - extract prompt
+                prompt = request_data.get("prompt", "")
+                if isinstance(prompt, list):
+                    prompt_text = " ".join(prompt)
                 else:
-                    raise ValueError(
-                        f"Cannot determine request type for token estimation"
-                    )
+                    prompt_text = str(prompt)
 
-            # Add max_tokens if present in request
-            max_tokens = request_data.get("max_tokens", 0)
-            total_tokens = prompt_tokens + max_tokens
+            # Make request to llama.cpp tokenization endpoint
+            tokenize_url = f"{self.base_url}/tokenize"
 
-            self.logger.debug(
-                f"Token estimation: {prompt_tokens} prompt + {max_tokens} max = {total_tokens} total"
-            )
-            return total_tokens
+            payload = {"content": prompt_text}
 
-        except aiohttp.ClientError as e:
-            self.logger.error(f"HTTP error during token estimation: {e}")
-            raise RuntimeError(f"Failed to estimate tokens: {e}")
-        except (KeyError, ValueError) as e:
-            self.logger.error(f"Invalid request format for token estimation: {e}")
-            raise ValueError(f"Invalid request format: {e}")
-
-    async def _estimate_chat_tokens(self, request_data: dict) -> int:
-        """
-        Estimate tokens for chat completions request.
-
-        Args:
-            request_data: Chat completions request data
-
-        Returns:
-            Estimated prompt token count
-        """
-        messages = request_data.get("messages", [])
-
-        # Build prompt string from messages
-        prompt_parts = []
-        for message in messages:
-            role = message.get("role", "")
-            content = message.get("content", "")
-            if role and content:
-                prompt_parts.append(f"{role}: {content}")
-
-        prompt = "\n".join(prompt_parts)
-        return await self._tokenize_text(prompt)
-
-    async def _estimate_text_tokens(self, request_data: dict) -> int:
-        """
-        Estimate tokens for text completions request.
-
-        Args:
-            request_data: Text completions request data
-
-        Returns:
-            Estimated prompt token count
-        """
-        prompt = request_data.get("prompt", "")
-        if isinstance(prompt, list):
-            # Join multiple prompts
-            prompt = " ".join(prompt)
-
-        return await self._tokenize_text(str(prompt))
-
-    async def _tokenize_text(self, text: str) -> int:
-        """
-        Tokenize text using llama.cpp tokenization endpoint.
-
-        Args:
-            text: Text to tokenize
-
-        Returns:
-            Number of tokens in the text
-
-        Raises:
-            RuntimeError: If tokenization fails
-        """
-        if not text:
-            return 0
-
-        url = f"{self.base_url}/tokenize"
-
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(
-                    url,
-                    json={"content": text},
-                    timeout=aiohttp.ClientTimeout(total=10.0),
-                ) as response:
+            timeout = aiohttp.ClientTimeout(total=30.0)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(tokenize_url, json=payload) as response:
                     if response.status != 200:
                         error_text = await response.text()
-                        raise RuntimeError(
-                            f"Tokenization failed with status {response.status}: {error_text}"
+                        raise Exception(
+                            f"Tokenization request failed with status {response.status}: {error_text}"
                         )
 
                     result = await response.json()
-                    tokens = result.get("tokens", [])
-                    return len(tokens)
 
-            except asyncio.TimeoutError:
-                self.logger.error(
-                    f"Tokenization timeout for text of length {len(text)}"
-                )
-                raise RuntimeError("Tokenization request timed out")
-            except json.JSONDecodeError as e:
-                self.logger.error(
-                    f"Invalid JSON response from tokenization endpoint: {e}"
-                )
-                raise RuntimeError("Invalid tokenization response format")
+                    # llama.cpp returns tokens in a 'tokens' array
+                    tokens = result.get("tokens", [])
+                    prompt_tokens = len(tokens)
+
+            # Add max_tokens if present in the request
+            max_tokens = request_data.get("max_tokens", 0)
+
+            total_tokens = prompt_tokens + max_tokens
+
+            self.logger.debug(
+                f"Estimated tokens: {prompt_tokens} (prompt) + {max_tokens} (max) = {total_tokens}"
+            )
+
+            return total_tokens
+
+        except aiohttp.ClientError as e:
+            self.logger.error(f"Failed to estimate tokens (network error): {e}")
+            raise Exception(f"Token estimation failed: {e}")
+        except Exception as e:
+            self.logger.error(f"Failed to estimate tokens: {e}")
+            raise
 
     def transform_request(self, request_data: dict) -> dict:
         """
-        Transform OpenAI request to llama.cpp compatible format.
+        Transform request data for llama.cpp-specific format.
+        Remove or transform unsupported fields for llama.cpp.
 
         Args:
-            request_data: Original OpenAI request data
+            request_data: Original request data dictionary
 
         Returns:
-            Transformed request data for llama.cpp
+            Transformed request data dictionary
         """
+        # Create a copy to avoid modifying the original
         transformed = request_data.copy()
 
-        # Remove OpenAI-specific fields that llama.cpp doesn't support
-        unsupported_fields = ["logit_bias", "logprobs", "top_logprobs", "user"]
+        # List of OpenAI-specific fields that llama.cpp might not support
+        # Note: llama.cpp actually supports many OpenAI fields, but we'll handle known incompatibilities
+        unsupported_fields = []
 
-        for field in unsupported_fields:
+        # Check for fields that might need special handling
+        # For now, we'll be permissive and let llama.cpp handle most fields
+        # Log warnings for fields that are commonly unsupported
+
+        potentially_unsupported = [
+            "user",
+            "logit_bias",
+            "functions",
+            "function_call",
+            "tools",
+            "tool_choice",
+        ]
+
+        for field in potentially_unsupported:
             if field in transformed:
-                self.logger.warning(f"Removing unsupported field: {field}")
+                unsupported_fields.append(field)
+                # Remove the field
                 del transformed[field]
 
-        # Transform any field names if needed
-        # Currently, llama.cpp uses the same field names as OpenAI API
+        if unsupported_fields:
+            self.logger.warning(
+                f"Removed unsupported fields for llama.cpp: {unsupported_fields}"
+            )
 
-        self.logger.debug(f"Transformed request: removed {unsupported_fields}")
         return transformed
 
     def transform_response(self, response_data: dict) -> dict:
         """
-        Transform llama.cpp response to OpenAI compatible format.
+        Transform llama.cpp response to OpenAI-compatible format.
 
         Args:
-            response_data: Original llama.cpp response data
+            response_data: Engine response data dictionary
 
         Returns:
-            Transformed response data in OpenAI format
+            Transformed response data dictionary
         """
-        transformed = response_data.copy()
+        # llama.cpp typically returns OpenAI-compatible responses already
+        # We may need to add or adjust some fields for full compatibility
 
-        # Check if this is a streaming response
-        is_streaming = transformed.get("stream", False)
+        # For now, pass through as llama.cpp is already OpenAI-compatible
+        # Future enhancements can add field mapping if needed
 
-        # Determine response type based on structure
-        # Chat completions have "message" field, text completions have "text" field
-        is_chat_completion = False
-        if "choices" in transformed and transformed["choices"]:
-            first_choice = transformed["choices"][0]
-            if "message" in first_choice:
-                is_chat_completion = True
-            elif "text" in first_choice:
-                is_chat_completion = False
-            else:
-                # Default to chat completion for backward compatibility
-                is_chat_completion = True
-
-        if is_streaming:
-            # For streaming responses, we need to transform each chunk
-            # The basic structure is already OpenAI compatible
-            # We'll just ensure required fields are present
-            if "choices" in transformed and transformed["choices"]:
-                choice = transformed["choices"][0]
-                if is_chat_completion and "text" in choice and "content" not in choice:
-                    # Convert text to content for chat completions
-                    choice["delta"] = {"content": choice.pop("text")}
-                elif (
-                    not is_chat_completion
-                    and "content" in choice
-                    and "text" not in choice
-                ):
-                    # Convert content to text for text completions
-                    choice["text"] = choice.pop("content")
-        else:
-            # For non-streaming responses, ensure the format matches OpenAI
-            if "choices" in transformed and transformed["choices"]:
-                for choice in transformed["choices"]:
-                    if is_chat_completion:
-                        # Ensure message structure for chat completions
-                        if "message" not in choice and "text" in choice:
-                            choice["message"] = {
-                                "role": "assistant",
-                                "content": choice.pop("text"),
-                            }
-                        elif "message" in choice and "content" not in choice["message"]:
-                            # Ensure content field exists
-                            choice["message"]["content"] = ""
-                    else:
-                        # Ensure text field for text completions
-                        if "text" not in choice and "content" in choice:
-                            choice["text"] = choice.pop("content")
-
-        # Ensure required top-level fields
-        if "object" not in transformed:
-            if is_chat_completion:
-                transformed["object"] = "chat.completion"
-            else:
-                transformed["object"] = "text_completion"
-
-        self.logger.debug("Transformed response to OpenAI format")
-        return transformed
+        return response_data
 
     def get_supported_endpoints(self) -> List[str]:
         """
-        Get list of endpoints supported by llama.cpp.
+        Get list of supported API endpoints for llama.cpp.
 
         Returns:
             List of supported endpoint paths
         """
-        return ["/v1/chat/completions", "/v1/completions", "/tokenize", "/health"]
+        return ["/v1/chat/completions", "/v1/completions"]
 
     async def check_health(self, timeout: float = 5.0) -> bool:
         """
         Check if llama.cpp engine endpoint is available and responding.
+        Override to use llama.cpp-specific health check if available.
 
         Args:
-            timeout: Health check timeout in seconds
+            timeout: Timeout in seconds for the health check
 
         Returns:
-            True if engine is healthy, False otherwise
+            True if engine is healthy and responding, False otherwise
         """
-        # First try the llama.cpp specific health endpoint
-        health_url = f"{self.base_url}/health"
-
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.get(
-                    health_url, timeout=aiohttp.ClientTimeout(total=timeout)
-                ) as response:
-                    if response.status == 200:
-                        # Try to parse JSON response
-                        try:
-                            health_data = await response.json()
-                            status = health_data.get("status", "").lower()
-                            return status == "ok" or status == "healthy"
-                        except (json.JSONDecodeError, KeyError):
-                            # If no valid JSON, treat 200 as healthy
+        # llama.cpp has a /health endpoint, try that first, then fall back to base implementation
+        try:
+            timeout_obj = aiohttp.ClientTimeout(total=timeout)
+            async with aiohttp.ClientSession(timeout=timeout_obj) as session:
+                # Try /health endpoint
+                try:
+                    async with session.get(f"{self.base_url}/health") as response:
+                        if response.status == 200:
+                            self.logger.debug(
+                                f"Llama.cpp health check passed for {self.base_url}"
+                            )
                             return True
-            except (aiohttp.ClientError, asyncio.TimeoutError):
-                pass
+                except aiohttp.ClientError:
+                    pass
 
-        # Fall back to parent class health check if llama.cpp specific check failed
-        self.logger.debug(
-            "Llama.cpp health endpoint failed, falling back to generic check"
-        )
-        return await super().check_health(timeout)
+                # Fallback to /v1/models endpoint
+                try:
+                    async with session.get(f"{self.base_url}/v1/models") as response:
+                        if response.status == 200:
+                            self.logger.debug(
+                                f"Llama.cpp health check passed (via /v1/models) for {self.base_url}"
+                            )
+                            return True
+                except aiohttp.ClientError:
+                    pass
+
+                self.logger.debug(f"Llama.cpp health check failed for {self.base_url}")
+                return False
+
+        except Exception as e:
+            self.logger.debug(f"Llama.cpp health check error for {self.base_url}: {e}")
+            return False

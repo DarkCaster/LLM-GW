@@ -1,105 +1,93 @@
-"""
-EngineManager - Coordinates engine lifecycle and state management.
-
-Manages engine processes, handles engine switching, and ensures correct
-engine is running for incoming requests.
-"""
+# engine/engine_manager.py
 
 import asyncio
-from typing import Dict, Optional, Any
-
-from .engine_client import EngineClient
-from .llamacpp_engine import LlamaCppEngine
-from .engine_process import EngineProcess
+from typing import Optional, Dict
 from utils.logger import get_logger
+from .engine_client import EngineClient
+from .engine_process import EngineProcess
+from .llamacpp_engine import LlamaCppEngine
 
 
 class EngineManager:
     """
-    Manages LLM engine lifecycle and state.
-
-    Singleton pattern - one manager instance for the entire application.
+    Coordinate engine lifecycle - stop old engines, start new ones, track state.
+    Singleton pattern - one manager for the entire application.
     """
 
     _instance: Optional["EngineManager"] = None
+    _lock: asyncio.Lock = None
 
     def __new__(cls):
+        """
+        Implement singleton pattern.
+        """
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
 
     def __init__(self):
-        """Initialize EngineManager (singleton)."""
-        if not self._initialized:
-            self._logger = get_logger(self.__class__.__name__)
+        """
+        Initialize the engine manager.
+        """
+        if self._initialized:
+            return
 
-            # Current engine state
-            self.current_engine_process: Optional[EngineProcess] = None
-            self.current_engine_client: Optional[EngineClient] = None
-            self.current_variant_config: Optional[Dict[str, Any]] = None
-            self.current_model_name: Optional[str] = None
+        self.logger = get_logger(self.__class__.__name__)
 
-            # Lock for preventing concurrent engine switches
-            self._lock = asyncio.Lock()
+        # Current engine state
+        self.current_engine_process: Optional[EngineProcess] = None
+        self.current_engine_client: Optional[EngineClient] = None
+        self.current_variant_config: Optional[Dict] = None
+        self.current_model_name: Optional[str] = None
 
-            # Engine type mapping
-            self._engine_types = {
-                "llama.cpp": LlamaCppEngine,
-                # Future: add other engine types here
-            }
+        # Lock for preventing concurrent engine switches
+        if EngineManager._lock is None:
+            EngineManager._lock = asyncio.Lock()
 
-            self._initialized = True
-            self._logger.info("EngineManager initialized")
+        self._initialized = True
+
+        self.logger.info("EngineManager initialized")
 
     async def ensure_engine(
-        self, model_name: str, variant_config: Dict[str, Any], engine_type: str
+        self, model_name: str, variant_config: Dict, engine_type: str
     ) -> EngineClient:
         """
-        Ensure the correct engine is running for the requested model and variant.
+        Ensure the correct engine is running for the given model and variant.
+        If the same variant is already running, return current client.
+        If different variant needed, switch engines.
 
         Args:
-            model_name: Name of the model to load
-            variant_config: Configuration for the engine variant
+            model_name: Name of the model
+            variant_config: Configuration dictionary for the variant
             engine_type: Type of engine (e.g., "llama.cpp")
 
         Returns:
-            EngineClient instance for communicating with the engine
+            EngineClient instance for the running engine
 
         Raises:
-            ValueError: If engine_type is not supported
-            RuntimeError: If engine fails to start or health check fails
+            Exception: If engine fails to start or becomes unhealthy
         """
-        async with self._lock:
-            # Check if we already have the requested engine running
-            if self._is_same_engine(model_name, variant_config):
-                self._logger.debug(
-                    f"Requested engine already running: {model_name}, "
-                    f"context={variant_config.get('context', 'N/A')}"
-                )
-
-                # Verify engine is still healthy
-                try:
-                    if await self.current_engine_client.check_health():
+        async with EngineManager._lock:
+            # Check if the same variant is already running
+            if self._is_same_variant(model_name, variant_config):
+                # Verify health of current engine
+                if self.current_engine_client:
+                    is_healthy = await self.current_engine_client.check_health(
+                        timeout=5.0
+                    )
+                    if is_healthy:
+                        self.logger.info(
+                            f"Engine already running with correct variant for model '{model_name}'"
+                        )
                         return self.current_engine_client
                     else:
-                        self._logger.warning(
-                            "Current engine failed health check, restarting..."
-                        )
-                except Exception as e:
-                    self._logger.error(
-                        f"Health check failed: {e}, restarting engine..."
-                    )
+                        self.logger.warning("Current engine is unhealthy, restarting")
 
-                # If health check failed, continue with engine switch
+            # Need to switch engines
+            self.logger.info(f"Switching to variant for model '{model_name}'")
 
-            self._logger.info(
-                f"Switching engine: {model_name}, "
-                f"context={variant_config.get('context', 'N/A')}, "
-                f"type={engine_type}"
-            )
-
-            # Stop current engine if running
+            # Stop current engine
             await self._stop_current_engine()
 
             # Start new engine
@@ -107,200 +95,183 @@ class EngineManager:
 
             return self.current_engine_client
 
+    def _is_same_variant(self, model_name: str, variant_config: Dict) -> bool:
+        """
+        Check if the requested variant is the same as currently running.
+
+        Args:
+            model_name: Name of the model
+            variant_config: Configuration dictionary for the variant
+
+        Returns:
+            True if same variant is running, False otherwise
+        """
+        if self.current_model_name != model_name:
+            return False
+
+        if self.current_variant_config is None:
+            return False
+
+        # Compare key fields to determine if it's the same variant
+        # We'll compare binary, connect URL, and context size
+        current_binary = self.current_variant_config.get("binary")
+        current_connect = self.current_variant_config.get("connect")
+        current_context = self.current_variant_config.get("context")
+
+        new_binary = variant_config.get("binary")
+        new_connect = variant_config.get("connect")
+        new_context = variant_config.get("context")
+
+        return (
+            current_binary == new_binary
+            and current_connect == new_connect
+            and current_context == new_context
+        )
+
     async def _stop_current_engine(self) -> None:
-        """Stop the currently running engine process."""
-        if not self.current_engine_process:
-            self._logger.debug("No engine running to stop")
+        """
+        Stop the currently running engine if any.
+        """
+        if self.current_engine_process is None:
+            self.logger.debug("No current engine to stop")
             return
+
+        self.logger.info(
+            f"Stopping current engine for model '{self.current_model_name}'"
+        )
 
         try:
             await self.current_engine_process.stop(timeout=15.0)
-            self._logger.info(f"Stopped engine for model: {self.current_model_name}")
+            self.logger.info("Engine stopped successfully")
         except Exception as e:
-            self._logger.error(f"Error stopping engine: {e}")
+            self.logger.error(f"Error stopping engine: {e}")
         finally:
+            # Clear current state
             self.current_engine_process = None
             self.current_engine_client = None
             self.current_variant_config = None
             self.current_model_name = None
 
     async def _start_new_engine(
-        self, model_name: str, variant_config: Dict[str, Any], engine_type: str
+        self, model_name: str, variant_config: Dict, engine_type: str
     ) -> None:
         """
         Start a new engine with the given configuration.
 
         Args:
-            model_name: Name of the model to load
-            variant_config: Configuration for the engine variant
+            model_name: Name of the model
+            variant_config: Configuration dictionary for the variant
             engine_type: Type of engine (e.g., "llama.cpp")
 
         Raises:
-            ValueError: If engine_type is not supported or config is invalid
-            RuntimeError: If engine fails to start or health check times out
+            ValueError: If engine type is unknown
+            Exception: If engine fails to start or doesn't become ready
         """
-        if engine_type not in self._engine_types:
-            raise ValueError(f"Unsupported engine type: {engine_type}")
+        # Extract configuration
+        binary = variant_config.get("binary")
+        args = variant_config.get("args", [])
+        connect_url = variant_config.get("connect")
 
-        # Validate required configuration fields
-        required_fields = ["binary", "args", "connect"]
-        for field in required_fields:
-            if field not in variant_config:
-                raise ValueError(f"Missing required field in variant config: {field}")
+        if not binary:
+            raise ValueError("Variant configuration missing 'binary' field")
+        if not connect_url:
+            raise ValueError("Variant configuration missing 'connect' field")
 
-        # Create engine client
-        engine_client_class = self._engine_types[engine_type]
-        base_url = variant_config["connect"]
-        self.current_engine_client = engine_client_class(base_url=base_url)
-
-        # Create and start engine process
-        binary_path = variant_config["binary"]
-        args = variant_config["args"]
-
-        self.current_engine_process = EngineProcess(
-            binary_path=binary_path, args=args, logger=self._logger
+        self.logger.info(
+            f"Starting new engine for model '{model_name}' with engine type '{engine_type}'"
         )
 
+        # Create appropriate EngineClient based on engine type
+        if engine_type == "llama.cpp":
+            engine_client = LlamaCppEngine(connect_url)
+        else:
+            raise ValueError(f"Unknown engine type: {engine_type}")
+
+        # Create EngineProcess
+        engine_process = EngineProcess(binary, args, work_dir=None)
+
+        # Start the process
         try:
-            await self.current_engine_process.start()
+            await engine_process.start()
         except Exception as e:
-            self._logger.error(f"Failed to start engine process: {e}")
-            # Clean up on failure
-            self.current_engine_process = None
-            self.current_engine_client = None
-            raise RuntimeError(f"Failed to start engine: {e}")
+            self.logger.error(f"Failed to start engine process: {e}")
+            raise
 
-        # Wait for engine to be ready
-        if not await self._wait_for_engine_ready():
-            # Clean up on timeout
-            try:
-                await self._stop_current_engine()
-            except Exception as e:
-                self._logger.error(f"Error cleaning up failed engine: {e}")
-            raise RuntimeError("Engine failed to become ready within timeout")
+        # Wait for engine to become ready
+        try:
+            await self._wait_for_engine_ready(engine_client, timeout=60.0)
+        except Exception as e:
+            # Engine failed to become ready, stop the process
+            self.logger.error(f"Engine failed to become ready: {e}")
+            await engine_process.stop(timeout=10.0)
+            raise
 
-        # Store state
-        self.current_variant_config = variant_config.copy()
+        # Store current engine state
+        self.current_engine_process = engine_process
+        self.current_engine_client = engine_client
+        self.current_variant_config = variant_config
         self.current_model_name = model_name
 
-        self._logger.info(
-            f"Engine started successfully: {model_name} "
-            f"(PID: {self.current_engine_process.get_pid()})"
-        )
+        self.logger.info(f"Engine started successfully for model '{model_name}'")
 
     async def _wait_for_engine_ready(
-        self, timeout: float = 60.0, check_interval: float = 1.0
+        self, engine_client: EngineClient, timeout: float
     ) -> bool:
         """
-        Wait for engine to become ready by polling health checks.
+        Wait for the engine HTTP endpoint to become available.
 
         Args:
+            engine_client: EngineClient instance to check
             timeout: Maximum time to wait in seconds
-            check_interval: Time between health checks in seconds
 
         Returns:
-            True if engine becomes ready within timeout, False otherwise
+            True if engine becomes ready
+
+        Raises:
+            TimeoutError: If engine doesn't become ready within timeout
         """
-        if not self.current_engine_client:
-            return False
+        self.logger.info("Waiting for engine to become ready...")
 
         start_time = asyncio.get_event_loop().time()
-        elapsed = 0.0
+        check_interval = 1.0  # Check every 1 second
 
-        self._logger.info(f"Waiting for engine to be ready (timeout: {timeout}s)...")
+        while True:
+            elapsed = asyncio.get_event_loop().time() - start_time
 
-        while elapsed < timeout:
-            try:
-                if await self.current_engine_client.check_health(timeout=5.0):
-                    self._logger.info(f"Engine ready after {elapsed:.1f}s")
-                    return True
-            except Exception as e:
-                self._logger.debug(f"Health check attempt failed: {e}")
+            if elapsed >= timeout:
+                raise TimeoutError(
+                    f"Engine did not become ready within {timeout} seconds"
+                )
+
+            # Check health
+            is_ready = await engine_client.check_health(timeout=5.0)
+
+            if is_ready:
+                self.logger.info(f"Engine is ready (took {elapsed:.1f}s)")
+                return True
+
+            # Log progress
+            self.logger.debug(f"Waiting for engine to be ready... {elapsed:.1f}s")
 
             # Wait before next check
             await asyncio.sleep(check_interval)
-            elapsed = asyncio.get_event_loop().time() - start_time
-
-            if elapsed % 5.0 < check_interval:  # Log every ~5 seconds
-                self._logger.debug(
-                    f"Still waiting for engine... {elapsed:.1f}s elapsed"
-                )
-
-        self._logger.error(f"Engine failed to become ready within {timeout}s timeout")
-        return False
-
-    def _is_same_engine(self, model_name: str, variant_config: Dict[str, Any]) -> bool:
-        """
-        Check if requested engine matches currently running engine.
-
-        Args:
-            model_name: Requested model name
-            variant_config: Requested variant configuration
-
-        Returns:
-            True if same engine is already running, False otherwise
-        """
-        if not self.current_model_name or not self.current_variant_config:
-            return False
-
-        # Check model name
-        if self.current_model_name != model_name:
-            return False
-
-        # Compare key configuration parameters
-        current_ctx = self.current_variant_config.get("context")
-        requested_ctx = variant_config.get("context")
-
-        if current_ctx != requested_ctx:
-            return False
-
-        # Check if binary and args are the same (for safety)
-        current_binary = self.current_variant_config.get("binary")
-        requested_binary = variant_config.get("binary")
-
-        if current_binary != requested_binary:
-            return False
-
-        # We could compare more fields, but context and binary are the main ones
-
-        return True
 
     def get_current_client(self) -> Optional[EngineClient]:
         """
-        Get the client for the currently running engine.
+        Get the currently running engine client.
 
         Returns:
-            EngineClient if engine is running, None otherwise
+            Current EngineClient instance if available, None otherwise
         """
         return self.current_engine_client
 
     async def shutdown(self) -> None:
-        """Shutdown the engine manager and stop any running engine."""
-        self._logger.info("Shutting down EngineManager...")
-        async with self._lock:
+        """
+        Shutdown the engine manager and stop any running engines.
+        """
+        self.logger.info("Shutting down EngineManager")
+
+        async with EngineManager._lock:
             await self._stop_current_engine()
-        self._logger.info("EngineManager shutdown complete")
 
-    def get_current_state(self) -> Dict[str, Any]:
-        """
-        Get current engine state for monitoring/debugging.
-
-        Returns:
-            Dictionary with current engine state information
-        """
-        state = {
-            "model_name": self.current_model_name,
-            "engine_running": self.current_engine_process is not None,
-            "variant_config": self.current_variant_config,
-        }
-
-        if self.current_engine_process:
-            state.update(
-                {
-                    "pid": self.current_engine_process.get_pid(),
-                    "status": self.current_engine_process.get_status(),
-                    "uptime": self.current_engine_process.get_uptime(),
-                }
-            )
-
-        return state
+        self.logger.info("EngineManager shutdown complete")

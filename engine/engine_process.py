@@ -1,61 +1,54 @@
-"""
-EngineProcess - Wrapper for managing a single LLM engine subprocess.
-
-Provides process lifecycle management, status monitoring, and log capture.
-"""
+# engine/engine_process.py
 
 import asyncio
-import logging
-import time
-from typing import List, Optional
-
+import asyncio.subprocess
+from typing import Optional, List
 from utils.logger import get_logger
 
 
 class EngineProcess:
-    """Wrapper for managing a single LLM engine subprocess."""
+    """
+    Wrapper for managing a single LLM engine subprocess.
+    """
 
     def __init__(
-        self,
-        binary_path: str,
-        args: List[str],
-        work_dir: Optional[str] = None,
-        logger: Optional[logging.Logger] = None,
+        self, binary_path: str, args: List[str], work_dir: Optional[str] = None
     ):
         """
-        Initialize EngineProcess with binary and arguments.
+        Initialize the engine process wrapper.
 
         Args:
             binary_path: Path to the engine binary executable
-            args: List of command-line arguments for the binary
-            work_dir: Working directory for the subprocess (optional)
-            logger: Logger instance (uses class name if not provided)
+            args: List of command-line arguments to pass to the engine
+            work_dir: Working directory for the process (optional)
         """
         self.binary_path = binary_path
         self.args = args
         self.work_dir = work_dir
-        self._logger = logger or get_logger(self.__class__.__name__)
+        self.logger = get_logger(self.__class__.__name__)
 
         self._process: Optional[asyncio.subprocess.Process] = None
+        self._status = "stopped"
         self._stdout_task: Optional[asyncio.Task] = None
         self._stderr_task: Optional[asyncio.Task] = None
-        self._status: str = "initialized"
         self._start_time: Optional[float] = None
-        self._stopped_by_us: bool = False
-        self._exit_code: Optional[int] = None
 
     async def start(self) -> None:
         """
         Start the engine subprocess.
 
         Raises:
-            RuntimeError: If process is already running or fails to start
-            FileNotFoundError: If binary path does not exist
+            Exception: If process fails to start
         """
-        if self.is_running():
-            raise RuntimeError("Process is already running")
+        if self._process is not None and self.is_running():
+            self.logger.warning("Process is already running")
+            return
 
         try:
+            self.logger.info(
+                f"Starting engine process: {self.binary_path} {' '.join(self.args)}"
+            )
+
             # Create subprocess
             self._process = await asyncio.create_subprocess_exec(
                 self.binary_path,
@@ -65,190 +58,170 @@ class EngineProcess:
                 cwd=self.work_dir,
             )
 
-            self._start_time = time.time()
-            self._status = "running"
-            self._stopped_by_us = False
-            self._exit_code = None
+            # Record start time
+            self._start_time = asyncio.get_event_loop().time()
 
-            # Start log reading tasks
+            # Set status
+            self._status = "running"
+
+            # Start log reader tasks
             self._stdout_task = asyncio.create_task(self._read_stdout())
             self._stderr_task = asyncio.create_task(self._read_stderr())
 
-            self._logger.info(
-                f"Started engine process (PID: {self.get_pid()}) "
-                f"with command: {self.binary_path} {' '.join(self.args)}"
-            )
+            self.logger.info(f"Engine process started with PID: {self._process.pid}")
 
-        except FileNotFoundError:
-            self._logger.error(f"Binary not found: {self.binary_path}")
-            raise
         except Exception as e:
-            self._logger.error(f"Failed to start engine process: {e}")
-            self._status = "failed"
-            raise RuntimeError(f"Failed to start engine process: {e}")
+            self.logger.error(f"Failed to start engine process: {e}")
+            self._status = "stopped"
+            raise
 
     async def stop(self, timeout: float = 10.0) -> None:
         """
-        Stop the engine process gracefully, with forceful fallback.
+        Stop the engine subprocess gracefully, with forceful termination if needed.
 
         Args:
-            timeout: Time to wait for graceful shutdown before forcing (seconds)
+            timeout: Maximum time to wait for graceful shutdown before forcing
         """
-        if not self.is_running():
-            self._logger.debug("Process is not running, nothing to stop")
+        if self._process is None:
+            self.logger.debug("No process to stop")
             return
 
-        self._logger.info(f"Stopping engine process (PID: {self.get_pid()})...")
-        self._stopped_by_us = True
+        if not self.is_running():
+            self.logger.debug("Process is not running")
+            self._cleanup()
+            return
 
         try:
-            # Send SIGTERM for graceful shutdown
-            if self._process and self._process.returncode is None:
-                self._process.terminate()
+            self.logger.info(f"Stopping engine process (PID: {self._process.pid})")
 
-            # Wait for process to exit
+            # Send SIGTERM for graceful shutdown
+            try:
+                self._process.terminate()
+            except ProcessLookupError:
+                self.logger.debug("Process already terminated")
+                self._cleanup()
+                return
+
+            # Wait for process to exit with timeout
             try:
                 await asyncio.wait_for(self._process.wait(), timeout=timeout)
+                self.logger.info("Engine process terminated gracefully")
             except asyncio.TimeoutError:
-                self._logger.warning(
-                    f"Process did not terminate gracefully within {timeout}s, forcing..."
+                # Timeout expired, force kill
+                self.logger.warning(
+                    f"Engine process did not terminate within {timeout}s, forcing kill"
                 )
-                if self._process and self._process.returncode is None:
+                try:
                     self._process.kill()
                     await self._process.wait()
-
-            # Cancel and wait for reader tasks
-            if self._stdout_task and not self._stdout_task.done():
-                self._stdout_task.cancel()
-            if self._stderr_task and not self._stderr_task.done():
-                self._stderr_task.cancel()
-
-            # Wait for tasks to complete
-            if self._stdout_task:
-                try:
-                    await self._stdout_task
-                except asyncio.CancelledError:
-                    pass
-            if self._stderr_task:
-                try:
-                    await self._stderr_task
-                except asyncio.CancelledError:
-                    pass
-
-            if self._process:
-                self._exit_code = self._process.returncode
-
-            self._status = "stopped"
-            self._logger.info(f"Engine process stopped (exit code: {self._exit_code})")
+                    self.logger.info("Engine process killed forcefully")
+                except ProcessLookupError:
+                    self.logger.debug("Process already terminated during kill")
 
         except Exception as e:
-            self._logger.error(f"Error during process stop: {e}")
-            self._status = "failed"
-            raise
+            self.logger.error(f"Error stopping engine process: {e}")
+        finally:
+            self._cleanup()
 
+    def _cleanup(self) -> None:
+        """
+        Clean up process resources and tasks.
+        """
+        # Cancel log reader tasks
+        if self._stdout_task and not self._stdout_task.done():
+            self._stdout_task.cancel()
+        if self._stderr_task and not self._stderr_task.done():
+            self._stderr_task.cancel()
+
+        self._status = "stopped"
+        self._stdout_task = None
+        self._stderr_task = None
+
+    @property
     def is_running(self) -> bool:
         """
-        Check if the process is currently running.
+        Check if subprocess is still alive.
 
         Returns:
             True if process is running, False otherwise
         """
-        if not self._process:
+        if self._process is None:
             return False
-        return self._process.returncode is None
 
-    def get_pid(self) -> Optional[int]:
+        # Check if process has terminated
+        if self._process.returncode is not None:
+            # Process has exited
+            if self._status == "running":
+                self._status = "crashed" if self._process.returncode != 0 else "stopped"
+            return False
+
+        return True
+
+    @property
+    def pid(self) -> Optional[int]:
         """
-        Get the process ID.
+        Get process PID.
 
         Returns:
             Process PID if running, None otherwise
         """
-        if not self._process:
-            return None
-        return self._process.pid
-
-    def get_status(self) -> str:
-        """
-        Get the current process status.
-
-        Returns:
-            Status string: "initialized", "running", "stopped", "crashed", "failed"
-        """
-        if self._status == "running" and not self.is_running():
-            # Check if process crashed
-            if self._process and self._process.returncode is not None:
-                if self._stopped_by_us:
-                    self._status = "stopped"
-                else:
-                    self._status = "crashed"
-        return self._status
-
-    def get_uptime(self) -> Optional[float]:
-        """
-        Get process uptime in seconds.
-
-        Returns:
-            Uptime in seconds if running, None otherwise
-        """
-        if self._start_time and self.is_running():
-            return time.time() - self._start_time
+        if self._process is not None and self.is_running:
+            return self._process.pid
         return None
 
+    @property
+    def status(self) -> str:
+        """
+        Get process status.
+
+        Returns:
+            Status string: "running", "stopped", or "crashed"
+        """
+        # Update status based on current process state
+        if self._process is not None and self._process.returncode is not None:
+            if self._status == "running":
+                self._status = "crashed" if self._process.returncode != 0 else "stopped"
+
+        return self._status
+
     async def _read_stdout(self) -> None:
-        """Continuously read and log stdout from the process."""
-        if not self._process or not self._process.stdout:
+        """
+        Continuously read and log stdout from the subprocess.
+        """
+        if self._process is None or self._process.stdout is None:
             return
 
         try:
-            while self.is_running():
+            while True:
                 line = await self._process.stdout.readline()
                 if not line:
                     break
 
-                decoded_line = line.decode("utf-8", errors="replace").rstrip()
-                if decoded_line:  # Skip empty lines
-                    self._logger.info(f"[stdout] {decoded_line}")
-
+                line_str = line.decode("utf-8", errors="replace").rstrip()
+                if line_str:
+                    self.logger.info(f"[ENGINE-STDOUT] {line_str}")
         except asyncio.CancelledError:
-            self._logger.debug("Stdout reader task cancelled")
-            raise
+            self.logger.debug("stdout reader task cancelled")
         except Exception as e:
-            self._logger.error(f"Error reading stdout: {e}")
-        finally:
-            self._logger.debug("Stdout reader task finished")
+            self.logger.error(f"Error reading stdout: {e}")
 
     async def _read_stderr(self) -> None:
-        """Continuously read and log stderr from the process."""
-        if not self._process or not self._process.stderr:
+        """
+        Continuously read and log stderr from the subprocess.
+        """
+        if self._process is None or self._process.stderr is None:
             return
 
         try:
-            while self.is_running():
+            while True:
                 line = await self._process.stderr.readline()
                 if not line:
                     break
 
-                decoded_line = line.decode("utf-8", errors="replace").rstrip()
-                if decoded_line:  # Skip empty lines
-                    self._logger.warning(f"[stderr] {decoded_line}")
-
+                line_str = line.decode("utf-8", errors="replace").rstrip()
+                if line_str:
+                    self.logger.warning(f"[ENGINE-STDERR] {line_str}")
         except asyncio.CancelledError:
-            self._logger.debug("Stderr reader task cancelled")
-            raise
+            self.logger.debug("stderr reader task cancelled")
         except Exception as e:
-            self._logger.error(f"Error reading stderr: {e}")
-        finally:
-            self._logger.debug("Stderr reader task finished")
-
-    def __str__(self) -> str:
-        """String representation of the engine process."""
-        status = self.get_status()
-        pid = self.get_pid() or "N/A"
-        uptime = self.get_uptime()
-        uptime_str = f"{uptime:.1f}s" if uptime else "N/A"
-
-        return (
-            f"EngineProcess(pid={pid}, status={status}, "
-            f"uptime={uptime_str}, binary={self.binary_path})"
-        )
+            self.logger.error(f"Error reading stderr: {e}")

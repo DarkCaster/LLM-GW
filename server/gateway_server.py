@@ -1,29 +1,22 @@
-"""
-GatewayServer - Main HTTP server for LLM gateway.
-
-This module provides the main HTTP server implementation that listens on
-configured addresses and routes requests to appropriate handlers.
-"""
+# server/gateway_server.py
 
 import asyncio
-import re
-from typing import Tuple, List, Optional
-
 from aiohttp import web
-import python_lua_helper
-
-from models.model_selector import ModelSelector
-from engine.engine_manager import EngineManager
-from server.request_handler import RequestHandler
+from typing import Optional, List, Tuple
 from utils.logger import get_logger
+from models import ModelSelector
+from engine import EngineManager
+from .request_handler import RequestHandler
 
 
 class GatewayServer:
-    """Main HTTP server that listens on configured addresses and routes requests."""
+    """
+    Main HTTP server that listens and routes requests.
+    """
 
-    def __init__(self, cfg: python_lua_helper.PyLuaHelper):
+    def __init__(self, cfg):
         """
-        Initialize GatewayServer with configuration.
+        Initialize the gateway server.
 
         Args:
             cfg: PyLuaHelper configuration object
@@ -32,122 +25,31 @@ class GatewayServer:
         self.logger = get_logger(self.__class__.__name__)
 
         # Parse server configuration
-        self.listen_v4 = self.cfg.get("server.listen_v4", "127.0.0.1:7777")
+        self.listen_v4 = self.cfg.get("server.listen_v4", "none")
         self.listen_v6 = self.cfg.get("server.listen_v6", "none")
 
-        # Core components
-        self.model_selector: Optional[ModelSelector] = None
-        self.engine_manager: Optional[EngineManager] = None
-        self.request_handler: Optional[RequestHandler] = None
-        self.app: Optional[web.Application] = None
+        # Initialize components
+        self.model_selector = ModelSelector(cfg)
+        self.engine_manager = EngineManager()
+        self.request_handler = RequestHandler(
+            self.model_selector, self.engine_manager, cfg
+        )
 
         # Server state
+        self.app: Optional[web.Application] = None
         self.runners: List[web.AppRunner] = []
         self.sites: List[web.TCPSite] = []
-        self.is_running = False
-
-        # Initialize components
-        self._initialize_components()
-
-    def _initialize_components(self) -> None:
-        """Initialize all core components."""
-        self.logger.info("Initializing GatewayServer components...")
-
-        # Initialize ModelSelector
-        self.model_selector = ModelSelector(self.cfg)
-        self.logger.info(
-            f"ModelSelector initialized with {len(self.model_selector.list_models())} models"
-        )
-
-        # Initialize EngineManager (singleton)
-        self.engine_manager = EngineManager()
-        self.logger.info("EngineManager initialized")
-
-        # Initialize RequestHandler
-        self.request_handler = RequestHandler(
-            model_selector=self.model_selector,
-            engine_manager=self.engine_manager,
-            cfg=self.cfg,
-        )
-        self.logger.info("RequestHandler initialized")
-
-    def _parse_listen_address(self, address: str) -> Tuple[str, int]:
-        """
-        Parse a listen address string into host and port.
-
-        Args:
-            address: Address string in format "host:port"
-
-        Returns:
-            Tuple of (host, port)
-
-        Raises:
-            ValueError: If address format is invalid
-        """
-        if address.lower() == "none":
-            raise ValueError("Address is 'none', skipping")
-
-        # Match IPv4/IPv6 address with port
-        pattern = r"^(\[[0-9a-fA-F:]+\]|[^:]+):(\d+)$"
-        match = re.match(pattern, address)
-
-        if not match:
-            raise ValueError(f"Invalid address format: {address}")
-
-        host = match.group(1)
-        port = int(match.group(2))
-
-        # Remove brackets from IPv6 addresses
-        if host.startswith("[") and host.endswith("]"):
-            host = host[1:-1]
-
-        # Validate port range
-        if not (1 <= port <= 65535):
-            raise ValueError(f"Port {port} out of valid range (1-65535)")
-
-        return host, port
 
     async def start(self) -> None:
         """
-        Start the HTTP server.
-
-        Creates web application, registers routes, and starts listening
-        on configured addresses.
-
-        Raises:
-            RuntimeError: If server is already running or fails to start
+        Start the HTTP server and begin listening.
         """
-        if self.is_running:
-            raise RuntimeError("Server is already running")
+        self.logger.info("Starting Gateway Server")
 
-        self.logger.info("Starting GatewayServer...")
+        # Create aiohttp application
+        self.app = web.Application()
 
-        try:
-            # Create aiohttp web application
-            self.app = web.Application()
-            self._register_routes()
-
-            # Create app runner
-            runner = web.AppRunner(self.app)
-            await runner.setup()
-            self.runners.append(runner)
-
-            # Start sites for configured addresses
-            await self._start_listen_sites(runner)
-
-            self.is_running = True
-            self.logger.info("GatewayServer started successfully")
-
-        except Exception as e:
-            self.logger.error(f"Failed to start GatewayServer: {e}")
-            await self.stop()
-            raise RuntimeError(f"Failed to start server: {e}")
-
-    def _register_routes(self) -> None:
-        """Register all API routes."""
-        if not self.app or not self.request_handler:
-            raise RuntimeError("Components not initialized")
-
+        # Register routes
         self.app.router.add_post(
             "/v1/chat/completions", self.request_handler.handle_chat_completion
         )
@@ -159,161 +61,129 @@ class GatewayServer:
             "/v1/models/{model_id}", self.request_handler.handle_model_info
         )
 
-        # Add health check endpoint
-        self.app.router.add_get("/health", self._handle_health_check)
+        self.logger.info("Routes registered")
 
-        self.logger.debug("Routes registered successfully")
+        # Create runners for IPv4 and IPv6
+        runner = web.AppRunner(self.app)
+        await runner.setup()
+        self.runners.append(runner)
 
-    async def _start_listen_sites(self, runner: web.AppRunner) -> None:
-        """
-        Start TCP sites for listening addresses.
-
-        Args:
-            runner: AppRunner instance
-
-        Raises:
-            RuntimeError: If no valid listen addresses are configured
-        """
-        sites_configured = False
-
-        # Start IPv4 listener
-        if self.listen_v4.lower() != "none":
+        # Start IPv4 listener if configured
+        if self.listen_v4 and self.listen_v4.lower() != "none":
             try:
                 host, port = self._parse_listen_address(self.listen_v4)
-                site = web.TCPSite(runner, host, port)
+                site = web.TCPSite(
+                    runner, host, port, reuse_address=True, reuse_port=True
+                )
                 await site.start()
                 self.sites.append(site)
-                sites_configured = True
                 self.logger.info(f"Listening on IPv4: {host}:{port}")
-            except ValueError as e:
-                self.logger.error(f"Invalid IPv4 address '{self.listen_v4}': {e}")
             except Exception as e:
-                self.logger.error(f"Failed to start IPv4 listener: {e}")
+                self.logger.error(
+                    f"Failed to start IPv4 listener on {self.listen_v4}: {e}"
+                )
+                raise
 
-        # Start IPv6 listener
-        if self.listen_v6.lower() != "none":
+        # Start IPv6 listener if configured
+        if self.listen_v6 and self.listen_v6.lower() != "none":
             try:
                 host, port = self._parse_listen_address(self.listen_v6)
-                site = web.TCPSite(runner, host, port)
+                site = web.TCPSite(
+                    runner, host, port, reuse_address=True, reuse_port=True
+                )
                 await site.start()
                 self.sites.append(site)
-                sites_configured = True
                 self.logger.info(f"Listening on IPv6: {host}:{port}")
-            except ValueError as e:
-                self.logger.error(f"Invalid IPv6 address '{self.listen_v6}': {e}")
             except Exception as e:
-                self.logger.error(f"Failed to start IPv6 listener: {e}")
+                self.logger.error(
+                    f"Failed to start IPv6 listener on {self.listen_v6}: {e}"
+                )
+                # Don't raise here, IPv6 might not be available
 
-        if not sites_configured:
-            raise RuntimeError(
-                "No valid listen addresses configured. "
-                "Check server.listen_v4 and server.listen_v6 in configuration."
-            )
+        if not self.sites:
+            raise RuntimeError("No listeners were started. Check configuration.")
+
+        self.logger.info(f"Gateway Server started with {len(self.sites)} listener(s)")
 
     async def stop(self) -> None:
-        """Stop the HTTP server gracefully."""
-        if not self.is_running:
-            self.logger.debug("Server is not running, nothing to stop")
-            return
-
-        self.logger.info("Stopping GatewayServer...")
+        """
+        Stop the HTTP server and clean up resources.
+        """
+        self.logger.info("Stopping Gateway Server")
 
         # Stop all sites
         for site in self.sites:
-            try:
-                await site.stop()
-            except Exception as e:
-                self.logger.warning(f"Error stopping site: {e}")
+            await site.stop()
 
-        # Stop all runners
+        self.sites.clear()
+
+        # Clean up runners
         for runner in self.runners:
-            try:
-                await runner.cleanup()
-            except Exception as e:
-                self.logger.warning(f"Error cleaning up runner: {e}")
+            await runner.cleanup()
+
+        self.runners.clear()
 
         # Shutdown engine manager
-        if self.engine_manager:
-            try:
-                await self.engine_manager.shutdown()
-            except Exception as e:
-                self.logger.error(f"Error shutting down EngineManager: {e}")
+        await self.engine_manager.shutdown()
 
-        # Clear state
-        self.sites.clear()
-        self.runners.clear()
-        self.is_running = False
+        # Clean up application
+        if self.app:
+            await self.app.shutdown()
+            await self.app.cleanup()
 
-        self.logger.info("GatewayServer stopped successfully")
+        self.logger.info("Gateway Server stopped")
 
     async def run(self) -> None:
         """
-        Run the server until interrupted.
-
-        This method starts the server and then waits forever (or until
-        a shutdown signal is received).
+        Start the server and wait forever until interrupted.
         """
+        # Start the server
+        await self.start()
+
         try:
-            await self.start()
-
-            # Log available models
-            if self.model_selector:
-                models = self.model_selector.list_models()
-                self.logger.info(f"Available models: {', '.join(models)}")
-
-            # Keep running until interrupted
-            while self.is_running:
-                await asyncio.sleep(1)
-
-        except KeyboardInterrupt:
-            self.logger.info("Received keyboard interrupt")
-        except Exception as e:
-            self.logger.error(f"Server run error: {e}")
-            raise
+            # Wait forever
+            self.logger.info("Server is running. Press Ctrl+C to stop.")
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            self.logger.info("Server run cancelled")
         finally:
+            # Stop on interrupt
             await self.stop()
 
-    async def _handle_health_check(self, request: web.Request) -> web.Response:
+    def _parse_listen_address(self, address: str) -> Tuple[str, int]:
         """
-        Handle health check endpoint.
+        Parse "host:port" string into components.
 
         Args:
-            request: HTTP request
+            address: Address string in "host:port" format
 
         Returns:
-            Health check response
-        """
-        health_status = {
-            "status": "ok" if self.is_running else "down",
-            "service": "llm-gateway",
-            "version": "1.0.0",
-            "models_available": len(self.model_selector.list_models())
-            if self.model_selector
-            else 0,
-            "engine_running": self.engine_manager.get_current_state()["engine_running"]
-            if self.engine_manager
-            else False,
-        }
+            Tuple of (host, port)
 
-        status_code = 200 if self.is_running else 503
-        return web.json_response(health_status, status=status_code)
-
-    def get_server_info(self) -> dict:
+        Raises:
+            ValueError: If address format is invalid
         """
-        Get server information for monitoring/debugging.
+        if not address or address.lower() == "none":
+            raise ValueError("Invalid address: empty or 'none'")
 
-        Returns:
-            Dictionary with server information
-        """
-        return {
-            "running": self.is_running,
-            "listen_v4": self.listen_v4,
-            "listen_v6": self.listen_v6,
-            "models_available": len(self.model_selector.list_models())
-            if self.model_selector
-            else 0,
-            "engine_state": self.engine_manager.get_current_state()
-            if self.engine_manager
-            else {},
-            "active_connections": len(self.runners) if self.runners else 0,
-        }
+        parts = address.rsplit(":", 1)
+
+        if len(parts) != 2:
+            raise ValueError(f"Invalid address format: {address}. Expected 'host:port'")
+
+        host = parts[0].strip()
+        port_str = parts[1].strip()
+
+        # Handle IPv6 addresses in brackets
+        if host.startswith("[") and host.endswith("]"):
+            host = host[1:-1]
+
+        try:
+            port = int(port_str)
+        except ValueError:
+            raise ValueError(f"Invalid port number: {port_str}")
+
+        if port < 1 or port > 65535:
+            raise ValueError(f"Port number out of range: {port}")
+
+        return (host, port)

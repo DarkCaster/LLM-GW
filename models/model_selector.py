@@ -1,318 +1,257 @@
-"""
-ModelSelector - Selects appropriate model variant based on request requirements.
+# models/model_selector.py
 
-Analyzes incoming requests, estimates token requirements, and selects the
-smallest sufficient variant from available model configurations.
-"""
-
-import logging
-import math
-import python_lua_helper
-from typing import Dict, List, Any
-
-from engine.engine_manager import EngineManager
+from typing import Dict, List
+from utils.logger import get_logger
+from engine import EngineManager
 
 
 class ModelSelector:
-    """Selects model variants based on context requirements and request analysis."""
+    """
+    Analyze requests and select appropriate model variant based on context requirements.
+    """
 
-    def __init__(self, cfg: python_lua_helper.PyLuaHelper):
+    def __init__(self, cfg):
         """
-        Initialize ModelSelector with configuration.
+        Initialize the model selector.
 
         Args:
             cfg: PyLuaHelper configuration object
         """
-        self._cfg = cfg
-        self._logger = logging.getLogger(self.__class__.__name__)
+        self.cfg = cfg
+        self.logger = get_logger(self.__class__.__name__)
+
+        # Internal data structure: {model_name: {engine: str, variants: [variant_configs]}}
+        self.models: Dict[str, Dict] = {}
 
         # Parse and index all models from configuration
-        self._models = self._parse_models()
+        self._parse_models()
 
-        self._logger.info(f"ModelSelector initialized with {len(self._models)} models")
-
-    def _parse_models(self) -> Dict[str, Dict[str, Any]]:
+    def _parse_models(self) -> None:
         """
-        Parse models from configuration and build internal data structure.
-
-        Returns:
-            Dictionary mapping model names to model data with variants
+        Parse and index all models from configuration.
+        Build internal data structure with models and their variants.
         """
-        models_dict = {}
+        self.logger.info("Parsing models from configuration")
 
-        # Get list of model indices from configuration
-        model_indices = self._cfg.get_table_seq("models")
+        # Get the number of models in the models table
+        models_count = self.cfg.get_table_end("models") - self.cfg.get_table_start(
+            "models"
+        )
 
-        for idx in model_indices:
-            model_key = f"models.{idx}"
+        if models_count == 0:
+            self.logger.warning("No models found in configuration")
+            return
 
-            try:
-                # Get model name (mandatory field)
-                model_name = self._cfg.get(f"{model_key}.name")
-                if not model_name:
-                    self._logger.warning(f"Model at index {idx} has no name, skipping")
-                    continue
+        # Iterate through models table
+        for i in self.cfg.get_table_seq("models"):
+            model_path = f"models.{i}"
 
-                # Get engine type (mandatory field)
-                engine_type = self._cfg.get(f"{model_key}.engine")
-                if not engine_type:
-                    self._logger.warning(
-                        f"Model '{model_name}' has no engine type, skipping"
-                    )
-                    continue
-
-                # Get variants
-                variants = self._parse_variants(model_key, model_name)
-                if not variants:
-                    self._logger.warning(
-                        f"Model '{model_name}' has no valid variants, skipping"
-                    )
-                    continue
-
-                # Sort variants by context size (smallest to largest)
-                sorted_variants = sorted(variants, key=lambda v: v.get("context", 0))
-
-                models_dict[model_name] = {
-                    "name": model_name,
-                    "engine": engine_type,
-                    "variants": sorted_variants,
-                }
-
-                self._logger.debug(
-                    f"Loaded model '{model_name}' with {len(sorted_variants)} variants, "
-                    f"context sizes: {[v.get('context', 0) for v in sorted_variants]}"
-                )
-
-            except Exception as e:
-                self._logger.error(f"Failed to parse model at index {idx}: {e}")
+            # Extract model name
+            model_name = self.cfg.get(f"{model_path}.name")
+            if not model_name:
+                self.logger.warning(f"Model at index {i} has no name, skipping")
                 continue
 
-        return models_dict
+            # Extract engine type
+            engine_type = self.cfg.get(f"{model_path}.engine")
+            if not engine_type:
+                self.logger.warning(
+                    f"Model '{model_name}' has no engine type, skipping"
+                )
+                continue
 
-    def _parse_variants(self, model_key: str, model_name: str) -> List[Dict[str, Any]]:
-        """
-        Parse variants for a specific model.
+            # Parse variants
+            variants = []
+            variants_path = f"{model_path}.variants"
 
-        Args:
-            model_key: Configuration key for the model
-            model_name: Name of the model (for logging)
+            for variant_idx in self.cfg.get_table_seq(variants_path):
+                variant_path = f"{variants_path}.{variant_idx}"
 
-        Returns:
-            List of variant configurations
-        """
-        variants = []
+                # Extract variant configuration
+                variant_config = {
+                    "binary": self.cfg.get(f"{variant_path}.binary"),
+                    "connect": self.cfg.get(f"{variant_path}.connect"),
+                    "args": self.cfg.get_list(f"{variant_path}.args"),
+                    "tokenize": self.cfg.get_bool(f"{variant_path}.tokenize", False),
+                    "context": self.cfg.get_int(f"{variant_path}.context", 0),
+                }
 
-        try:
-            # Get variant indices for this model
-            variant_indices = self._cfg.get_table_seq(f"{model_key}.variants")
+                variants.append(variant_config)
 
-            for var_idx in variant_indices:
-                variant_key = f"{model_key}.variants.{var_idx}"
+            # Sort variants by context size (smallest to largest) for efficient selection
+            variants.sort(key=lambda v: v["context"])
 
-                try:
-                    # Extract variant configuration
-                    variant_config = {
-                        "binary": self._cfg.get(f"{variant_key}.binary"),
-                        "connect": self._cfg.get(f"{variant_key}.connect"),
-                        "args": self._cfg.get_list(f"{variant_key}.args"),
-                        "tokenize": self._cfg.get_bool(
-                            f"{variant_key}.tokenize", False
-                        ),
-                        "context": self._cfg.get_int(f"{variant_key}.context", 0),
-                    }
+            # Store model information
+            self.models[model_name] = {"engine": engine_type, "variants": variants}
 
-                    # Validate required fields
-                    if not variant_config["binary"] or not variant_config["connect"]:
-                        self._logger.warning(
-                            f"Variant {var_idx} of model '{model_name}' missing required fields, skipping"
-                        )
-                        continue
-
-                    variants.append(variant_config)
-
-                except Exception as e:
-                    self._logger.error(
-                        f"Failed to parse variant {var_idx} for model '{model_name}': {e}"
-                    )
-                    continue
-
-        except Exception as e:
-            self._logger.error(
-                f"Failed to parse variants for model '{model_name}': {e}"
+            self.logger.info(
+                f"Loaded model '{model_name}' with engine '{engine_type}' "
+                f"and {len(variants)} variant(s)"
             )
 
-        return variants
+        self.logger.info(f"Parsed {len(self.models)} model(s) from configuration")
 
     async def select_variant(
-        self,
-        model_name: str,
-        request_data: Dict[str, Any],
-        engine_manager: EngineManager,
-    ) -> Dict[str, Any]:
+        self, model_name: str, request_data: dict, engine_manager: EngineManager
+    ) -> dict:
         """
         Select appropriate model variant based on request requirements.
 
         Args:
-            model_name: Name of the model to use
-            request_data: Request data dictionary (from OpenAI API)
-            engine_manager: EngineManager instance for token estimation
+            model_name: Name of the requested model
+            request_data: The incoming request data dictionary
+            engine_manager: EngineManager instance for accessing current engine
 
         Returns:
-            Selected variant configuration
+            Selected variant configuration dictionary
 
         Raises:
-            ValueError: If model not found or no variant has sufficient context
+            ValueError: If model not found or no suitable variant available
         """
-        # Validate model exists
-        if model_name not in self._models:
+        # Validate that model exists
+        if model_name not in self.models:
             raise ValueError(f"Model '{model_name}' not found in configuration")
 
-        model_info = self._models[model_name]
+        model_info = self.models[model_name]
         variants = model_info["variants"]
 
-        self._logger.debug(
-            f"Selecting variant for model '{model_name}', "
-            f"available contexts: {[v.get('context', 0) for v in variants]}"
-        )
+        if not variants:
+            raise ValueError(f"Model '{model_name}' has no configured variants")
 
         # Estimate required context size
-        estimated_tokens = await self._estimate_required_tokens(
+        estimated_tokens = await self._estimate_context_size(
             model_name, request_data, engine_manager
         )
 
-        # Add safety margin (10% + 512 tokens minimum)
-        safety_margin = max(512, int(estimated_tokens * 0.1))
+        # Add safety margin (10% or minimum 512 tokens, whichever is larger)
+        safety_margin = max(int(estimated_tokens * 0.1), 512)
         required_tokens = estimated_tokens + safety_margin
 
-        self._logger.debug(
-            f"Token estimation: {estimated_tokens} + {safety_margin} safety = {required_tokens} required"
+        self.logger.info(
+            f"Estimated tokens: {estimated_tokens}, "
+            f"with safety margin: {required_tokens}"
         )
 
-        # Select smallest variant with sufficient context
+        # Select smallest variant where variant.context >= required_tokens
         selected_variant = None
+
         for variant in variants:
-            context_size = variant.get("context", 0)
-            if context_size >= required_tokens:
+            variant_context = variant["context"]
+            if variant_context >= required_tokens:
                 selected_variant = variant
+                self.logger.info(
+                    f"Selected variant with context size {variant_context} "
+                    f"for model '{model_name}' (required: {required_tokens})"
+                )
                 break
 
-        if not selected_variant:
-            max_context = max(v.get("context", 0) for v in variants)
+        # If no variant found, raise error
+        if selected_variant is None:
+            max_context = variants[-1]["context"] if variants else 0
             raise ValueError(
-                f"Request requires {required_tokens} tokens, "
-                f"but largest variant only supports {max_context}"
+                f"Request requires {required_tokens} tokens, but largest variant "
+                f"for model '{model_name}' only supports {max_context} tokens"
             )
-
-        self._logger.info(
-            f"Selected variant for model '{model_name}': "
-            f"context={selected_variant.get('context', 0)}, "
-            f"estimated={estimated_tokens}, required={required_tokens}"
-        )
 
         return selected_variant
 
-    async def _estimate_required_tokens(
-        self,
-        model_name: str,
-        request_data: Dict[str, Any],
-        engine_manager: EngineManager,
+    async def _estimate_context_size(
+        self, model_name: str, request_data: dict, engine_manager: EngineManager
     ) -> int:
         """
-        Estimate token requirements for the request.
+        Estimate the context size required for the request.
 
         Args:
-            model_name: Name of the model
-            request_data: Request data dictionary
-            engine_manager: EngineManager instance
+            model_name: Name of the requested model
+            request_data: The incoming request data dictionary
+            engine_manager: EngineManager instance for accessing current engine
 
         Returns:
-            Estimated token count
+            Estimated number of tokens required
         """
-        model_info = self._models[model_name]
+        # Check if there's a currently running engine that supports tokenization
         current_client = engine_manager.get_current_client()
 
-        # Check if we can use precise tokenization
-        can_tokenize = False
-        current_variant_config = None
+        # Check if current engine is for the same model and supports tokenization
+        can_use_tokenization = False
 
-        # Get current engine state
-        current_state = engine_manager.get_current_state()
-        if current_state.get("model_name") == model_name and current_state.get(
-            "variant_config"
-        ):
-            current_variant_config = current_state["variant_config"]
+        if current_client is not None:
+            # Check if current engine is for the same model
+            if engine_manager.current_model_name == model_name:
+                # Check if the variant supports tokenization
+                if engine_manager.current_variant_config:
+                    can_use_tokenization = engine_manager.current_variant_config.get(
+                        "tokenize", False
+                    )
 
-        # Check if current variant supports tokenization
-        if (
-            current_client
-            and current_variant_config
-            and current_variant_config.get("tokenize", False)
-        ):
-            can_tokenize = True
-
-        if can_tokenize:
+        if can_use_tokenization:
+            # Use engine's tokenization endpoint
             try:
-                # Use engine's precise token estimation
-                tokens = await current_client.estimate_tokens(request_data)
-                self._logger.debug(f"Precise token estimation: {tokens} tokens")
-                return tokens
+                self.logger.debug("Using engine tokenization for estimation")
+                estimated_tokens = await current_client.estimate_tokens(request_data)
+                return estimated_tokens
             except Exception as e:
-                self._logger.warning(
-                    f"Precise token estimation failed: {e}, using fallback"
+                self.logger.warning(
+                    f"Failed to use engine tokenization: {e}, falling back to estimation"
                 )
-                # Fall through to fallback estimation
 
-        # Fallback: rough estimation based on character count
-        # Assume ~4 characters per token (conservative estimate for English)
-        fallback_tokens = self._fallback_token_estimation(request_data)
+        # Fallback to rough estimation
+        self.logger.debug("Using fallback character-based estimation")
+        return self._fallback_estimate(request_data)
 
-        self._logger.warning(
-            f"Using fallback token estimation: {fallback_tokens} tokens "
-            f"(model: {model_name})"
-        )
-
-        return fallback_tokens
-
-    def _fallback_token_estimation(self, request_data: Dict[str, Any]) -> int:
+    def _fallback_estimate(self, request_data: dict) -> int:
         """
-        Fallback token estimation based on character count.
+        Fallback method to estimate tokens based on character count.
+        Uses rough heuristic: 1 token ≈ 4 characters.
 
         Args:
-            request_data: Request data dictionary
+            request_data: The incoming request data dictionary
 
         Returns:
-            Rough token estimate
+            Estimated number of tokens
         """
-        total_chars = 0
+        char_count = 0
 
-        # Check for chat completions request
+        # Determine request type
         if "messages" in request_data:
+            # Chat completions
             messages = request_data.get("messages", [])
-            for message in messages:
-                content = message.get("content", "")
-                if content:
-                    total_chars += len(str(content))
-
-        # Check for text completions request
+            for msg in messages:
+                content = msg.get("content", "")
+                if isinstance(content, str):
+                    char_count += len(content)
+                elif isinstance(content, list):
+                    # Handle array of content parts
+                    for part in content:
+                        if isinstance(part, dict):
+                            text = part.get("text", "")
+                            char_count += len(text)
         elif "prompt" in request_data:
+            # Text completions
             prompt = request_data.get("prompt", "")
-            if isinstance(prompt, list):
+            if isinstance(prompt, str):
+                char_count += len(prompt)
+            elif isinstance(prompt, list):
                 for p in prompt:
-                    total_chars += len(str(p))
-            else:
-                total_chars += len(str(prompt))
+                    char_count += len(str(p))
 
-        # Add max_tokens if specified
+        # Rough estimation: 1 token ≈ 4 characters
+        estimated_prompt_tokens = char_count // 4
+
+        # Add max_tokens if present
         max_tokens = request_data.get("max_tokens", 0)
 
-        # Estimate tokens: characters / 4 (rough estimate for English)
-        prompt_tokens = math.ceil(total_chars / 4) if total_chars > 0 else 0
-        total_tokens = prompt_tokens + max_tokens
+        total_estimate = estimated_prompt_tokens + max_tokens
 
-        # Ensure minimum token count
-        return max(total_tokens, 10)
+        self.logger.warning(
+            f"Using imprecise estimation: {char_count} chars ≈ "
+            f"{estimated_prompt_tokens} tokens + {max_tokens} max_tokens = "
+            f"{total_estimate} total"
+        )
 
-    def get_model_info(self, model_name: str) -> Dict[str, Any]:
+        return total_estimate
+
+    def get_model_info(self, model_name: str) -> dict:
         """
         Get information about a specific model.
 
@@ -325,24 +264,22 @@ class ModelSelector:
         Raises:
             ValueError: If model not found
         """
-        if model_name not in self._models:
+        if model_name not in self.models:
             raise ValueError(f"Model '{model_name}' not found in configuration")
 
-        model_info = self._models[model_name]
+        model_info = self.models[model_name]
+        variants = model_info["variants"]
+
+        # Extract context sizes from variants
+        context_sizes = [v["context"] for v in variants]
 
         return {
-            "id": model_name,
-            "object": "model",
-            "created": 0,  # Placeholder
-            "owned_by": "llm-gateway",
+            "name": model_name,
             "engine": model_info["engine"],
-            "available_context_sizes": [
-                v.get("context", 0) for v in model_info["variants"]
-            ],
-            "variants_count": len(model_info["variants"]),
-            "supports_tokenization": any(
-                v.get("tokenize", False) for v in model_info["variants"]
-            ),
+            "variants_count": len(variants),
+            "context_sizes": context_sizes,
+            "min_context": min(context_sizes) if context_sizes else 0,
+            "max_context": max(context_sizes) if context_sizes else 0,
         }
 
     def list_models(self) -> List[str]:
@@ -350,59 +287,6 @@ class ModelSelector:
         Get list of all configured model names.
 
         Returns:
-            List of model names
+            List of model name strings
         """
-        return list(self._models.keys())
-
-    def get_available_models(self) -> List[Dict[str, Any]]:
-        """
-        Get detailed information about all configured models.
-
-        Returns:
-            List of model information dictionaries
-        """
-        models_info = []
-        for model_name in self.list_models():
-            try:
-                model_info = self.get_model_info(model_name)
-                models_info.append(model_info)
-            except Exception as e:
-                self._logger.error(f"Failed to get info for model '{model_name}': {e}")
-
-        return models_info
-
-    def get_model_engine_type(self, model_name: str) -> str:
-        """
-        Get engine type for a specific model.
-
-        Args:
-            model_name: Name of the model
-
-        Returns:
-            Engine type string
-
-        Raises:
-            ValueError: If model not found
-        """
-        if model_name not in self._models:
-            raise ValueError(f"Model '{model_name}' not found in configuration")
-
-        return self._models[model_name]["engine"]
-
-    def get_all_variants(self, model_name: str) -> List[Dict[str, Any]]:
-        """
-        Get all variants for a specific model.
-
-        Args:
-            model_name: Name of the model
-
-        Returns:
-            List of variant configurations
-
-        Raises:
-            ValueError: If model not found
-        """
-        if model_name not in self._models:
-            raise ValueError(f"Model '{model_name}' not found in configuration")
-
-        return self._models[model_name]["variants"].copy()
+        return list(self.models.keys())

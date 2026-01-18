@@ -1,9 +1,4 @@
-"""
-Models selection and management package for LLM gateway.
-
-This package provides classes for selecting appropriate model variants
-based on request requirements.
-"""
+# models/__init__.py
 
 from .model_selector import ModelSelector
 

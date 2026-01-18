@@ -1,411 +1,507 @@
-import asyncio
-import time
-import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+# tests/test_engine_process.py
 
+import unittest
+import asyncio
+from unittest.mock import Mock, AsyncMock, patch
 from engine.engine_process import EngineProcess
 
 
-class TestEngineProcess(unittest.IsolatedAsyncioTestCase):
-    """Test the EngineProcess class for subprocess management."""
+class TestEngineProcess(unittest.TestCase):
+    """Test EngineProcess subprocess management."""
 
     def setUp(self):
         """Set up test fixtures."""
-        self.binary_path = "/path/to/engine"
-        self.args = ["--arg1", "value1", "--arg2", "value2"]
+        self.binary_path = "/usr/bin/llama-server"
+        self.args = ["-c", "2048", "-m", "model.gguf"]
         self.work_dir = "/tmp/test"
-        self.engine = EngineProcess(
-            binary_path=self.binary_path,
-            args=self.args,
-            work_dir=self.work_dir,
-        )
 
-    async def test_start_success(self):
-        """Test successful process start."""
-        # Create a mock process
-        mock_process = MagicMock(spec=asyncio.subprocess.Process)
-        mock_process.pid = 12345
-        mock_process.returncode = None  # Process is running
-        mock_process.stdout = AsyncMock(spec=asyncio.StreamReader)
-        mock_process.stderr = AsyncMock(spec=asyncio.StreamReader)
+    def test_initialization(self):
+        """Test EngineProcess initialization."""
+        process = EngineProcess(self.binary_path, self.args, self.work_dir)
 
-        # Mock stdout/stderr readline to simulate process output
-        mock_process.stdout.readline = AsyncMock(
-            side_effect=[
-                b"Engine started successfully\n",
-                b"",
-                b"",  # Empty bytes indicate EOF
-            ]
-        )
-        mock_process.stderr.readline = AsyncMock(
-            side_effect=[
-                b"Warning: Some warning\n",
-                b"",
-            ]
-        )
+        self.assertEqual(process.binary_path, self.binary_path)
+        self.assertEqual(process.args, self.args)
+        self.assertEqual(process.work_dir, self.work_dir)
+        self.assertIsNone(process._process)
+        self.assertEqual(process.status, "stopped")
+        self.assertIsNone(process.pid)
 
-        with patch(
-            "asyncio.create_subprocess_exec", AsyncMock(return_value=mock_process)
-        ):
-            await self.engine.start()
+    def test_initialization_without_work_dir(self):
+        """Test EngineProcess initialization without work directory."""
+        process = EngineProcess(self.binary_path, self.args)
 
-            # Verify process was started
-            self.assertTrue(self.engine.is_running())
-            self.assertEqual(self.engine.get_pid(), 12345)
-            self.assertEqual(self.engine.get_status(), "running")
-            self.assertIsNotNone(self.engine.get_uptime())
+        self.assertEqual(process.binary_path, self.binary_path)
+        self.assertEqual(process.args, self.args)
+        self.assertIsNone(process.work_dir)
 
-            # Verify subprocess was created with correct arguments
-            asyncio.create_subprocess_exec.assert_called_once_with(
-                self.binary_path,
-                *self.args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=self.work_dir,
-            )
+    def test_start_process(self):
+        """Test starting a subprocess."""
 
-    async def test_start_already_running(self):
-        """Test that starting an already running process raises error."""
-        # Mock a running process
-        mock_process = MagicMock(spec=asyncio.subprocess.Process)
-        mock_process.pid = 12345
-        mock_process.returncode = None
-        mock_process.stdout = AsyncMock()
-        mock_process.stderr = AsyncMock()
+        async def run_test():
+            process = EngineProcess(self.binary_path, self.args, self.work_dir)
 
-        with patch(
-            "asyncio.create_subprocess_exec", AsyncMock(return_value=mock_process)
-        ):
-            await self.engine.start()
+            mock_subprocess = AsyncMock()
+            mock_subprocess.pid = 12345
+            mock_subprocess.returncode = None
+            mock_subprocess.stdout = AsyncMock()
+            mock_subprocess.stdout.readline = AsyncMock(return_value=b"")
+            mock_subprocess.stderr = AsyncMock()
+            mock_subprocess.stderr.readline = AsyncMock(return_value=b"")
 
-            # Try to start again
-            with self.assertRaises(RuntimeError) as cm:
-                await self.engine.start()
-            self.assertIn("already running", str(cm.exception))
+            with patch(
+                "asyncio.create_subprocess_exec", return_value=mock_subprocess
+            ) as mock_create:
+                await process.start()
 
-    async def test_start_binary_not_found(self):
-        """Test starting with non-existent binary raises error."""
-        with patch(
-            "asyncio.create_subprocess_exec",
-            AsyncMock(side_effect=FileNotFoundError("Binary not found")),
-        ):
-            with self.assertRaises(FileNotFoundError):
-                await self.engine.start()
+                # Verify subprocess was created with correct arguments
+                mock_create.assert_called_once_with(
+                    self.binary_path,
+                    *self.args,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=self.work_dir,
+                )
 
-            # Status should be failed
-            self.assertEqual(self.engine.get_status(), "failed")
+                # Verify process state
+                self.assertEqual(process.status, "running")
+                self.assertEqual(process.pid, 12345)
+                self.assertTrue(process.is_running)
+                self.assertIsNotNone(process._start_time)
 
-    async def test_stop_graceful(self):
-        """Test graceful process stop."""
-        # Start a mock process
-        mock_process = MagicMock(spec=asyncio.subprocess.Process)
-        mock_process.pid = 12345
-        mock_process.returncode = None
-        mock_process.stdout = AsyncMock()
-        mock_process.stderr = AsyncMock()
-        mock_process.wait = AsyncMock(return_value=0)  # Exit code 0
+            # Clean up tasks
+            if process._stdout_task:
+                process._stdout_task.cancel()
+            if process._stderr_task:
+                process._stderr_task.cancel()
 
-        with patch(
-            "asyncio.create_subprocess_exec", AsyncMock(return_value=mock_process)
-        ):
-            await self.engine.start()
-            await self.engine.stop()
+        asyncio.run(run_test())
 
-            # Verify terminate was called
-            mock_process.terminate.assert_called_once()
-            mock_process.wait.assert_called_once()
+    def test_start_process_already_running(self):
+        """Test starting a process that is already running."""
 
-            # Verify process is stopped
-            self.assertFalse(self.engine.is_running())
-            self.assertEqual(self.engine.get_status(), "stopped")
+        async def run_test():
+            process = EngineProcess(self.binary_path, self.args)
 
-    async def test_stop_forceful(self):
-        """Test forceful process stop after timeout."""
-        # Start a mock process
-        mock_process = MagicMock(spec=asyncio.subprocess.Process)
-        mock_process.pid = 12345
-        mock_process.returncode = None
-        mock_process.stdout = AsyncMock()
-        mock_process.stderr = AsyncMock()
+            mock_subprocess = AsyncMock()
+            mock_subprocess.pid = 12345
+            mock_subprocess.returncode = None
+            mock_subprocess.stdout = AsyncMock()
+            mock_subprocess.stdout.readline = AsyncMock(return_value=b"")
+            mock_subprocess.stderr = AsyncMock()
+            mock_subprocess.stderr.readline = AsyncMock(return_value=b"")
 
-        # Simulate timeout on graceful shutdown
-        mock_process.wait = AsyncMock(side_effect=asyncio.TimeoutError())
+            with patch(
+                "asyncio.create_subprocess_exec", return_value=mock_subprocess
+            ) as mock_create:
+                await process.start()
 
-        with patch(
-            "asyncio.create_subprocess_exec", AsyncMock(return_value=mock_process)
-        ):
-            await self.engine.start()
-            await self.engine.stop(timeout=0.1)  # Short timeout for test
+                # Try to start again
+                await process.start()
 
-            # Verify both terminate and kill were called
-            mock_process.terminate.assert_called_once()
-            mock_process.kill.assert_called_once()
-            mock_process.wait.assert_called()
+                # Should only be called once
+                self.assertEqual(mock_create.call_count, 1)
 
-            # Verify process is stopped
-            self.assertFalse(self.engine.is_running())
+            # Clean up tasks
+            if process._stdout_task:
+                process._stdout_task.cancel()
+            if process._stderr_task:
+                process._stderr_task.cancel()
 
-    async def test_stop_not_running(self):
-        """Test stopping a process that isn't running."""
-        # Process was never started
-        self.assertFalse(self.engine.is_running())
+        asyncio.run(run_test())
 
-        # Should not raise an error
-        await self.engine.stop()
+    def test_start_process_failure(self):
+        """Test handling of subprocess start failure."""
 
-        # Status should remain initialized
-        self.assertEqual(self.engine.get_status(), "initialized")
+        async def run_test():
+            process = EngineProcess(self.binary_path, self.args)
 
-    def test_is_running(self):
-        """Test the is_running method in various states."""
-        # Initially not running
-        self.assertFalse(self.engine.is_running())
+            with patch(
+                "asyncio.create_subprocess_exec",
+                side_effect=FileNotFoundError("Binary not found"),
+            ):
+                with self.assertRaises(FileNotFoundError):
+                    await process.start()
 
-        # Mock a running process
-        mock_process = MagicMock(spec=asyncio.subprocess.Process)
-        mock_process.returncode = None
-        self.engine._process = mock_process
-        self.assertTrue(self.engine.is_running())
+                # Verify process state
+                self.assertEqual(process.status, "stopped")
+                self.assertIsNone(process._process)
 
-        # Mock a terminated process
-        mock_process.returncode = 0
-        self.assertFalse(self.engine.is_running())
+        asyncio.run(run_test())
 
-        # No process object
-        self.engine._process = None
-        self.assertFalse(self.engine.is_running())
+    def test_stop_process_graceful(self):
+        """Test graceful process termination."""
 
-    def test_get_pid(self):
-        """Test getting the process ID."""
-        # No process
-        self.assertIsNone(self.engine.get_pid())
+        async def run_test():
+            process = EngineProcess(self.binary_path, self.args)
 
-        # With process
-        mock_process = MagicMock(spec=asyncio.subprocess.Process)
-        mock_process.pid = 12345
-        self.engine._process = mock_process
-        self.assertEqual(self.engine.get_pid(), 12345)
+            mock_subprocess = AsyncMock()
+            mock_subprocess.pid = 12345
+            mock_subprocess.returncode = None
+            mock_subprocess.stdout = AsyncMock()
+            mock_subprocess.stdout.readline = AsyncMock(return_value=b"")
+            mock_subprocess.stderr = AsyncMock()
+            mock_subprocess.stderr.readline = AsyncMock(return_value=b"")
+            mock_subprocess.terminate = Mock()
+            mock_subprocess.wait = AsyncMock()
 
-    def test_get_status(self):
-        """Test status detection in various states."""
-        # Initial state
-        self.assertEqual(self.engine.get_status(), "initialized")
+            with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess):
+                await process.start()
 
-        # Running state
-        mock_process = MagicMock(spec=asyncio.subprocess.Process)
-        mock_process.returncode = None
-        self.engine._process = mock_process
-        self.engine._status = "running"
-        self.assertEqual(self.engine.get_status(), "running")
+                # Simulate successful graceful termination
+                async def wait_side_effect():
+                    mock_subprocess.returncode = 0
 
-        # Process crashed (returncode set, not stopped by us)
-        mock_process.returncode = 1
-        self.engine._stopped_by_us = False
-        self.assertEqual(self.engine.get_status(), "crashed")
+                mock_subprocess.wait = AsyncMock(side_effect=wait_side_effect)
 
-        # Process stopped by us
-        mock_process.returncode = 0
-        self.engine._stopped_by_us = True
-        self.assertEqual(self.engine.get_status(), "stopped")
+                await process.stop(timeout=5.0)
 
-        # Failed state
-        self.engine._status = "failed"
-        self.assertEqual(self.engine.get_status(), "failed")
+                # Verify terminate was called
+                mock_subprocess.terminate.assert_called_once()
 
-    def test_get_uptime(self):
-        """Test uptime calculation."""
-        # No start time
-        self.assertIsNone(self.engine.get_uptime())
+                # Verify status
+                self.assertEqual(process.status, "stopped")
+                self.assertFalse(process.is_running)
 
-        # Set start time and running process
-        start_time = time.time() - 5.0  # 5 seconds ago
-        self.engine._start_time = start_time
+        asyncio.run(run_test())
 
-        mock_process = MagicMock(spec=asyncio.subprocess.Process)
-        mock_process.returncode = None
-        self.engine._process = mock_process
+    def test_stop_process_forceful(self):
+        """Test forceful process termination after timeout."""
 
-        uptime = self.engine.get_uptime()
-        self.assertIsNotNone(uptime)
-        self.assertGreaterEqual(uptime, 4.9)
-        self.assertLessEqual(uptime, 5.1)
+        async def run_test():
+            process = EngineProcess(self.binary_path, self.args)
 
-        # Process not running (should return None even with start_time)
-        mock_process.returncode = 0
-        self.assertIsNone(self.engine.get_uptime())
+            mock_subprocess = AsyncMock()
+            mock_subprocess.pid = 12345
+            mock_subprocess.returncode = None
+            mock_subprocess.stdout = AsyncMock()
+            mock_subprocess.stdout.readline = AsyncMock(return_value=b"")
+            mock_subprocess.stderr = AsyncMock()
+            mock_subprocess.stderr.readline = AsyncMock(return_value=b"")
+            mock_subprocess.terminate = Mock()
+            mock_subprocess.kill = Mock()
 
-    async def test_stdout_capture(self):
-        """Test stdout log capture."""
-        mock_process = MagicMock(spec=asyncio.subprocess.Process)
-        mock_process.pid = 12345
-        mock_process.returncode = None
-        mock_process.stdout = AsyncMock(spec=asyncio.StreamReader)
-        mock_process.stderr = AsyncMock(spec=asyncio.StreamReader)
+            # First wait times out, second wait (after kill) succeeds
+            async def wait_side_effect():
+                if mock_subprocess.kill.call_count > 0:
+                    mock_subprocess.returncode = -9
+                else:
+                    raise asyncio.TimeoutError()
 
-        # Simulate stdout lines
-        mock_process.stdout.readline = AsyncMock(
-            side_effect=[
-                b"Line 1\n",
-                b"Line 2\n",
+            mock_subprocess.wait = AsyncMock(side_effect=wait_side_effect)
+
+            with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess):
+                await process.start()
+
+                await process.stop(timeout=0.1)
+
+                # Verify both terminate and kill were called
+                mock_subprocess.terminate.assert_called_once()
+                mock_subprocess.kill.assert_called_once()
+
+                # Verify status
+                self.assertEqual(process.status, "stopped")
+
+        asyncio.run(run_test())
+
+    def test_stop_process_not_running(self):
+        """Test stopping a process that is not running."""
+
+        async def run_test():
+            process = EngineProcess(self.binary_path, self.args)
+
+            # Should not raise an error
+            await process.stop()
+
+            self.assertEqual(process.status, "stopped")
+
+        asyncio.run(run_test())
+
+    def test_stop_process_already_terminated(self):
+        """Test stopping a process that already terminated."""
+
+        async def run_test():
+            process = EngineProcess(self.binary_path, self.args)
+
+            mock_subprocess = AsyncMock()
+            mock_subprocess.pid = 12345
+            mock_subprocess.returncode = None
+            mock_subprocess.stdout = AsyncMock()
+            mock_subprocess.stdout.readline = AsyncMock(return_value=b"")
+            mock_subprocess.stderr = AsyncMock()
+            mock_subprocess.stderr.readline = AsyncMock(return_value=b"")
+            mock_subprocess.terminate = Mock(side_effect=ProcessLookupError())
+
+            with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess):
+                await process.start()
+
+                await process.stop()
+
+                # Should handle ProcessLookupError gracefully
+                self.assertEqual(process.status, "stopped")
+
+        asyncio.run(run_test())
+
+    def test_is_running_property(self):
+        """Test is_running property."""
+
+        async def run_test():
+            process = EngineProcess(self.binary_path, self.args)
+
+            # Initially not running
+            self.assertFalse(process.is_running)
+
+            mock_subprocess = AsyncMock()
+            mock_subprocess.pid = 12345
+            mock_subprocess.returncode = None
+            mock_subprocess.stdout = AsyncMock()
+            mock_subprocess.stdout.readline = AsyncMock(return_value=b"")
+            mock_subprocess.stderr = AsyncMock()
+            mock_subprocess.stderr.readline = AsyncMock(return_value=b"")
+
+            with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess):
+                await process.start()
+
+                # Should be running
+                self.assertTrue(process.is_running)
+
+                # Simulate process exit
+                mock_subprocess.returncode = 0
+
+                # Should no longer be running
+                self.assertFalse(process.is_running)
+
+            # Clean up tasks
+            if process._stdout_task:
+                process._stdout_task.cancel()
+            if process._stderr_task:
+                process._stderr_task.cancel()
+
+        asyncio.run(run_test())
+
+    def test_status_property_transitions(self):
+        """Test status property state transitions."""
+
+        async def run_test():
+            process = EngineProcess(self.binary_path, self.args)
+
+            # Initially stopped
+            self.assertEqual(process.status, "stopped")
+
+            mock_subprocess = AsyncMock()
+            mock_subprocess.pid = 12345
+            mock_subprocess.returncode = None
+            mock_subprocess.stdout = AsyncMock()
+            mock_subprocess.stdout.readline = AsyncMock(return_value=b"")
+            mock_subprocess.stderr = AsyncMock()
+            mock_subprocess.stderr.readline = AsyncMock(return_value=b"")
+
+            with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess):
+                await process.start()
+
+                # Should be running
+                self.assertEqual(process.status, "running")
+
+                # Simulate clean exit
+                mock_subprocess.returncode = 0
+                status = process.status
+                self.assertEqual(status, "stopped")
+
+                # Simulate crashed exit
+                process._status = "running"
+                mock_subprocess.returncode = 1
+                status = process.status
+                self.assertEqual(status, "crashed")
+
+            # Clean up tasks
+            if process._stdout_task:
+                process._stdout_task.cancel()
+            if process._stderr_task:
+                process._stderr_task.cancel()
+
+        asyncio.run(run_test())
+
+    def test_pid_property(self):
+        """Test PID property."""
+
+        async def run_test():
+            process = EngineProcess(self.binary_path, self.args)
+
+            # Initially no PID
+            self.assertIsNone(process.pid)
+
+            mock_subprocess = AsyncMock()
+            mock_subprocess.pid = 12345
+            mock_subprocess.returncode = None
+            mock_subprocess.stdout = AsyncMock()
+            mock_subprocess.stdout.readline = AsyncMock(return_value=b"")
+            mock_subprocess.stderr = AsyncMock()
+            mock_subprocess.stderr.readline = AsyncMock(return_value=b"")
+
+            with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess):
+                await process.start()
+
+                # Should have PID
+                self.assertEqual(process.pid, 12345)
+
+            # Clean up tasks
+            if process._stdout_task:
+                process._stdout_task.cancel()
+            if process._stderr_task:
+                process._stderr_task.cancel()
+
+        asyncio.run(run_test())
+
+    def test_stdout_capture(self):
+        """Test stdout capture and logging."""
+
+        async def run_test():
+            process = EngineProcess(self.binary_path, self.args)
+
+            # Create mock subprocess with stdout lines
+            mock_subprocess = AsyncMock()
+            mock_subprocess.pid = 12345
+            mock_subprocess.returncode = None
+
+            stdout_lines = [
+                b"Starting server...\n",
+                b"Server listening on port 8080\n",
                 b"",  # EOF
             ]
-        )
-        mock_process.stderr.readline = AsyncMock(return_value=b"")
 
-        with patch(
-            "asyncio.create_subprocess_exec", AsyncMock(return_value=mock_process)
-        ):
-            await self.engine.start()
+            mock_subprocess.stdout = AsyncMock()
+            mock_subprocess.stdout.readline = AsyncMock(side_effect=stdout_lines)
 
-            # Give the reader tasks time to process
-            await asyncio.sleep(0.01)
+            mock_subprocess.stderr = AsyncMock()
+            mock_subprocess.stderr.readline = AsyncMock(return_value=b"")
 
-            # Cancel reader tasks to stop them
-            if self.engine._stdout_task:
-                self.engine._stdout_task.cancel()
-                try:
-                    await self.engine._stdout_task
-                except asyncio.CancelledError:
-                    pass
+            with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess):
+                with patch.object(process.logger, "info") as mock_logger:
+                    await process.start()
 
-    async def test_stderr_capture(self):
-        """Test stderr log capture."""
-        mock_process = MagicMock(spec=asyncio.subprocess.Process)
-        mock_process.pid = 12345
-        mock_process.returncode = None
-        mock_process.stdout = AsyncMock(spec=asyncio.StreamReader)
-        mock_process.stderr = AsyncMock(spec=asyncio.StreamReader)
+                    # Wait a bit for stdout to be read
+                    await asyncio.sleep(0.1)
 
-        # Simulate stderr lines
-        mock_process.stdout.readline = AsyncMock(return_value=b"")
-        mock_process.stderr.readline = AsyncMock(
-            side_effect=[
-                b"Error: Something went wrong\n",
-                b"Warning: This is a warning\n",
+                    # Verify logger was called with stdout messages
+                    calls = [str(call) for call in mock_logger.call_args_list]
+                    stdout_calls = [c for c in calls if "ENGINE-STDOUT" in c]
+                    self.assertGreater(len(stdout_calls), 0)
+
+            # Clean up tasks
+            if process._stdout_task:
+                process._stdout_task.cancel()
+            if process._stderr_task:
+                process._stderr_task.cancel()
+
+        asyncio.run(run_test())
+
+    def test_stderr_capture(self):
+        """Test stderr capture and logging."""
+
+        async def run_test():
+            process = EngineProcess(self.binary_path, self.args)
+
+            # Create mock subprocess with stderr lines
+            mock_subprocess = AsyncMock()
+            mock_subprocess.pid = 12345
+            mock_subprocess.returncode = None
+
+            mock_subprocess.stdout = AsyncMock()
+            mock_subprocess.stdout.readline = AsyncMock(return_value=b"")
+
+            stderr_lines = [
+                b"Warning: Low memory\n",
+                b"Error loading model\n",
                 b"",  # EOF
             ]
-        )
 
-        with patch(
-            "asyncio.create_subprocess_exec", AsyncMock(return_value=mock_process)
-        ):
-            await self.engine.start()
+            mock_subprocess.stderr = AsyncMock()
+            mock_subprocess.stderr.readline = AsyncMock(side_effect=stderr_lines)
 
-            # Give the reader tasks time to process
-            await asyncio.sleep(0.01)
+            with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess):
+                with patch.object(process.logger, "warning") as mock_logger:
+                    await process.start()
 
-            # Cancel reader tasks to stop them
-            if self.engine._stderr_task:
-                self.engine._stderr_task.cancel()
-                try:
-                    await self.engine._stderr_task
-                except asyncio.CancelledError:
-                    pass
+                    # Wait a bit for stderr to be read
+                    await asyncio.sleep(0.1)
 
-    async def test_process_crash_detection(self):
-        """Test that process crashes are detected."""
-        mock_process = MagicMock(spec=asyncio.subprocess.Process)
-        mock_process.pid = 12345
-        mock_process.returncode = None  # Initially running
-        mock_process.stdout = AsyncMock()
-        mock_process.stderr = AsyncMock()
+                    # Verify logger was called with stderr messages
+                    calls = [str(call) for call in mock_logger.call_args_list]
+                    stderr_calls = [c for c in calls if "ENGINE-STDERR" in c]
+                    self.assertGreater(len(stderr_calls), 0)
 
-        with patch(
-            "asyncio.create_subprocess_exec", AsyncMock(return_value=mock_process)
-        ):
-            await self.engine.start()
+            # Clean up tasks
+            if process._stdout_task:
+                process._stdout_task.cancel()
+            if process._stderr_task:
+                process._stderr_task.cancel()
 
-            # Simulate process crash
-            mock_process.returncode = 1
-            self.engine._stopped_by_us = False
+        asyncio.run(run_test())
 
-            # Status should update to "crashed"
-            self.assertEqual(self.engine.get_status(), "crashed")
+    def test_cleanup_cancels_tasks(self):
+        """Test that cleanup cancels log reader tasks."""
 
-    def test_string_representation(self):
-        """Test the string representation of EngineProcess."""
-        # Test with no process
-        result = str(self.engine)
-        self.assertIn("EngineProcess", result)
-        self.assertIn("pid=N/A", result)
-        self.assertIn("status=initialized", result)
+        async def run_test():
+            process = EngineProcess(self.binary_path, self.args)
 
-        # Test with running process
-        mock_process = MagicMock(spec=asyncio.subprocess.Process)
-        mock_process.pid = 12345
-        mock_process.returncode = None
-        self.engine._process = mock_process
-        self.engine._status = "running"
-        self.engine._start_time = time.time() - 10.0
+            mock_subprocess = AsyncMock()
+            mock_subprocess.pid = 12345
+            mock_subprocess.returncode = None
+            mock_subprocess.stdout = AsyncMock()
+            mock_subprocess.stdout.readline = AsyncMock(return_value=b"")
+            mock_subprocess.stderr = AsyncMock()
+            mock_subprocess.stderr.readline = AsyncMock(return_value=b"")
+            mock_subprocess.terminate = Mock()
+            mock_subprocess.wait = AsyncMock()
 
-        result = str(self.engine)
-        self.assertIn("pid=12345", result)
-        self.assertIn("status=running", result)
-        self.assertIn("uptime=10.0s", result)
+            with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess):
+                await process.start()
 
-    async def test_concurrent_stop_protection(self):
-        """Test that stop can be called multiple times safely."""
-        mock_process = MagicMock(spec=asyncio.subprocess.Process)
-        mock_process.pid = 12345
-        mock_process.returncode = None
-        mock_process.stdout = AsyncMock()
-        mock_process.stderr = AsyncMock()
-        mock_process.wait = AsyncMock(return_value=0)
+                stdout_task = process._stdout_task
+                stderr_task = process._stderr_task
 
-        with patch(
-            "asyncio.create_subprocess_exec", AsyncMock(return_value=mock_process)
-        ):
-            await self.engine.start()
+                self.assertIsNotNone(stdout_task)
+                self.assertIsNotNone(stderr_task)
 
-            # Call stop multiple times concurrently
-            await asyncio.gather(
-                self.engine.stop(),
-                self.engine.stop(),
-                self.engine.stop(),
-            )
+                await process.stop()
 
-            # Should only stop once
-            mock_process.terminate.assert_called_once()
+                # Tasks should be cancelled
+                self.assertIsNone(process._stdout_task)
+                self.assertIsNone(process._stderr_task)
 
-    async def test_reader_task_cancellation_on_stop(self):
-        """Test that reader tasks are cancelled when process stops."""
-        mock_process = MagicMock(spec=asyncio.subprocess.Process)
-        mock_process.pid = 12345
-        mock_process.returncode = None
-        mock_process.stdout = AsyncMock()
-        mock_process.stderr = AsyncMock()
-        mock_process.wait = AsyncMock(return_value=0)
+        asyncio.run(run_test())
 
-        # Mock readline to hang until cancelled
-        readline_event = asyncio.Event()
+    def test_process_crash_detection(self):
+        """Test detection of crashed processes."""
 
-        async def hanging_readline():
-            await readline_event.wait()
-            return b""
+        async def run_test():
+            process = EngineProcess(self.binary_path, self.args)
 
-        mock_process.stdout.readline = AsyncMock(side_effect=hanging_readline)
-        mock_process.stderr.readline = AsyncMock(side_effect=hanging_readline)
+            mock_subprocess = AsyncMock()
+            mock_subprocess.pid = 12345
+            mock_subprocess.returncode = None
+            mock_subprocess.stdout = AsyncMock()
+            mock_subprocess.stdout.readline = AsyncMock(return_value=b"")
+            mock_subprocess.stderr = AsyncMock()
+            mock_subprocess.stderr.readline = AsyncMock(return_value=b"")
 
-        with patch(
-            "asyncio.create_subprocess_exec", AsyncMock(return_value=mock_process)
-        ):
-            await self.engine.start()
+            with patch("asyncio.create_subprocess_exec", return_value=mock_subprocess):
+                await process.start()
 
-            # Verify reader tasks were created
-            self.assertIsNotNone(self.engine._stdout_task)
-            self.assertIsNotNone(self.engine._stderr_task)
+                # Simulate process crash (non-zero exit code)
+                mock_subprocess.returncode = 1
 
-            # Stop the process (should cancel reader tasks)
-            stop_task = asyncio.create_task(self.engine.stop())
+                # Check status - should be detected as crashed
+                status = process.status
+                self.assertEqual(status, "crashed")
+                self.assertFalse(process.is_running)
 
-            # Release the readline hangs
-            readline_event.set()
+            # Clean up tasks
+            if process._stdout_task:
+                process._stdout_task.cancel()
+            if process._stderr_task:
+                process._stderr_task.cancel()
 
-            await stop_task
-
-            # Reader tasks should be done (cancelled)
-            self.assertTrue(self.engine._stdout_task.done())
-            self.assertTrue(self.engine._stderr_task.done())
+        asyncio.run(run_test())
 
 
 if __name__ == "__main__":

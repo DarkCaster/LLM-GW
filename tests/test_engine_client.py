@@ -1,346 +1,449 @@
-import asyncio
+# tests/test_engine_client.py
+
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
-
+import asyncio
 import aiohttp
-
+from unittest.mock import AsyncMock, patch
 from engine.engine_client import EngineClient
 from engine.llamacpp_engine import LlamaCppEngine
 
 
+class MockEngineClient(EngineClient):
+    """Concrete implementation of abstract EngineClient for testing."""
+
+    async def estimate_tokens(self, request_data: dict) -> int:
+        """Mock implementation."""
+        return 100
+
+    def transform_request(self, request_data: dict) -> dict:
+        """Mock implementation."""
+        return request_data
+
+    def transform_response(self, response_data: dict) -> dict:
+        """Mock implementation."""
+        return response_data
+
+    def get_supported_endpoints(self):
+        """Mock implementation."""
+        return ["/v1/chat/completions", "/v1/completions"]
+
+
 class TestEngineClient(unittest.TestCase):
-    """Test the base EngineClient abstract class."""
+    """Test base EngineClient abstract class."""
 
-    def test_abstract_base_class(self):
-        """Test that EngineClient is an abstract base class."""
+    def test_abstract_base_class_cannot_instantiate(self):
+        """Test that EngineClient cannot be instantiated directly."""
         with self.assertRaises(TypeError):
-            # Can't instantiate abstract class
-            EngineClient(base_url="http://test:8080")
+            EngineClient("http://localhost:8080")
 
-    def test_get_supported_endpoints_not_implemented(self):
-        """Test that get_supported_endpoints is abstract."""
+    def test_mock_engine_client_can_instantiate(self):
+        """Test that concrete implementation can be instantiated."""
+        client = MockEngineClient("http://localhost:8080")
+        self.assertIsNotNone(client)
+        self.assertEqual(client.base_url, "http://localhost:8080")
 
-        class ConcreteEngineClient(EngineClient):
-            async def estimate_tokens(self, request_data: dict) -> int:
-                return 0
+    def test_base_url_strips_trailing_slash(self):
+        """Test that base URL trailing slash is removed."""
+        client = MockEngineClient("http://localhost:8080/")
+        self.assertEqual(client.base_url, "http://localhost:8080")
 
-            def transform_request(self, request_data: dict) -> dict:
-                return request_data
+    def test_abstract_methods_must_be_implemented(self):
+        """Test that all abstract methods must be implemented."""
+        client = MockEngineClient("http://localhost:8080")
 
-            def transform_response(self, response_data: dict) -> dict:
-                return response_data
+        # These should all be callable without errors
+        asyncio.run(client.estimate_tokens({}))
+        client.transform_request({})
+        client.transform_response({})
+        client.get_supported_endpoints()
 
-        # Should raise NotImplementedError
-        with self.assertRaises(NotImplementedError):
-            ConcreteEngineClient(base_url="http://test:8080").get_supported_endpoints()
 
-
-class TestLlamaCppEngine(unittest.IsolatedAsyncioTestCase):
-    """Test the LlamaCppEngine implementation."""
+class TestLlamaCppEngine(unittest.TestCase):
+    """Test LlamaCppEngine implementation."""
 
     def setUp(self):
         """Set up test fixtures."""
-        self.base_url = "http://test:8080"
-        self.engine = LlamaCppEngine(base_url=self.base_url)
+        self.base_url = "http://localhost:8080"
+        self.engine = LlamaCppEngine(self.base_url)
 
-    async def test_estimate_tokens_chat_completion(self):
+    def test_initialization(self):
+        """Test LlamaCppEngine initialization."""
+        self.assertEqual(self.engine.base_url, self.base_url)
+        self.assertIsNotNone(self.engine.logger)
+
+    def test_get_supported_endpoints(self):
+        """Test that LlamaCppEngine returns correct supported endpoints."""
+        endpoints = self.engine.get_supported_endpoints()
+        self.assertIn("/v1/chat/completions", endpoints)
+        self.assertIn("/v1/completions", endpoints)
+        self.assertEqual(len(endpoints), 2)
+
+    def test_estimate_tokens_chat_completion(self):
         """Test token estimation for chat completion requests."""
-        request_data = {
-            "messages": [
-                {"role": "user", "content": "Hello, how are you?"},
-                {"role": "assistant", "content": "I'm fine, thank you!"},
-            ],
-            "max_tokens": 100,
-        }
 
-        # Mock the tokenization endpoint response
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={"tokens": [1, 2, 3, 4, 5]})
+        async def run_test():
+            request_data = {
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": "Hello, how are you?"},
+                ],
+                "max_tokens": 100,
+            }
 
-        with patch.object(
-            aiohttp.ClientSession, "post", AsyncMock(return_value=mock_response)
-        ):
-            tokens = await self.engine.estimate_tokens(request_data)
-            self.assertEqual(tokens, 105)  # 5 prompt tokens + 100 max_tokens
+            # Mock the tokenization response
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(
+                return_value={"tokens": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
+            )
 
-    async def test_estimate_tokens_text_completion(self):
+            mock_session = AsyncMock()
+            mock_session.post = AsyncMock(return_value=mock_response)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+
+            with patch("aiohttp.ClientSession", return_value=mock_session):
+                tokens = await self.engine.estimate_tokens(request_data)
+
+            # Should be 10 (prompt) + 100 (max_tokens) = 110
+            self.assertEqual(tokens, 110)
+
+        asyncio.run(run_test())
+
+    def test_estimate_tokens_text_completion(self):
         """Test token estimation for text completion requests."""
-        request_data = {
-            "prompt": "Once upon a time",
-            "max_tokens": 50,
-        }
 
-        # Mock the tokenization endpoint response
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={"tokens": [1, 2, 3]})
+        async def run_test():
+            request_data = {
+                "prompt": "Once upon a time in a land far away",
+                "max_tokens": 50,
+            }
 
-        with patch.object(
-            aiohttp.ClientSession, "post", AsyncMock(return_value=mock_response)
-        ):
-            tokens = await self.engine.estimate_tokens(request_data)
-            self.assertEqual(tokens, 53)  # 3 prompt tokens + 50 max_tokens
+            # Mock the tokenization response
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value={"tokens": [1, 2, 3, 4, 5]})
 
-    async def test_estimate_tokens_empty_prompt(self):
-        """Test token estimation with empty prompt."""
-        request_data = {
-            "messages": [],
-            "max_tokens": 10,
-        }
+            mock_session = AsyncMock()
+            mock_session.post = AsyncMock(return_value=mock_response)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
 
-        tokens = await self.engine.estimate_tokens(request_data)
-        self.assertEqual(tokens, 10)  # 0 prompt tokens + 10 max_tokens
+            with patch("aiohttp.ClientSession", return_value=mock_session):
+                tokens = await self.engine.estimate_tokens(request_data)
 
-    async def test_estimate_tokens_tokenization_failure(self):
-        """Test token estimation when tokenization endpoint fails."""
-        request_data = {
-            "messages": [{"role": "user", "content": "Hello"}],
-        }
+            # Should be 5 (prompt) + 50 (max_tokens) = 55
+            self.assertEqual(tokens, 55)
 
-        # Mock failed response
-        mock_response = MagicMock()
-        mock_response.status = 500
-        mock_response.text = AsyncMock(return_value="Internal server error")
+        asyncio.run(run_test())
 
-        with patch.object(
-            aiohttp.ClientSession, "post", AsyncMock(return_value=mock_response)
-        ):
-            with self.assertRaises(RuntimeError):
-                await self.engine.estimate_tokens(request_data)
+    def test_estimate_tokens_list_prompt(self):
+        """Test token estimation with list-based prompt."""
 
-    async def test_estimate_tokens_timeout(self):
-        """Test token estimation when tokenization times out."""
-        request_data = {
-            "messages": [{"role": "user", "content": "Hello"}],
-        }
+        async def run_test():
+            request_data = {
+                "prompt": ["First prompt", "Second prompt"],
+                "max_tokens": 20,
+            }
 
-        with patch.object(
-            aiohttp.ClientSession, "post", AsyncMock(side_effect=asyncio.TimeoutError())
-        ):
-            with self.assertRaises(RuntimeError):
-                await self.engine.estimate_tokens(request_data)
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value={"tokens": [1, 2, 3]})
+
+            mock_session = AsyncMock()
+            mock_session.post = AsyncMock(return_value=mock_response)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+
+            with patch("aiohttp.ClientSession", return_value=mock_session):
+                tokens = await self.engine.estimate_tokens(request_data)
+
+            # Should be 3 (prompt) + 20 (max_tokens) = 23
+            self.assertEqual(tokens, 23)
+
+        asyncio.run(run_test())
+
+    def test_estimate_tokens_without_max_tokens(self):
+        """Test token estimation without max_tokens field."""
+
+        async def run_test():
+            request_data = {
+                "messages": [{"role": "user", "content": "Hello"}],
+            }
+
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value={"tokens": [1, 2, 3, 4]})
+
+            mock_session = AsyncMock()
+            mock_session.post = AsyncMock(return_value=mock_response)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+
+            with patch("aiohttp.ClientSession", return_value=mock_session):
+                tokens = await self.engine.estimate_tokens(request_data)
+
+            # Should be 4 (prompt) + 0 (no max_tokens) = 4
+            self.assertEqual(tokens, 4)
+
+        asyncio.run(run_test())
+
+    def test_estimate_tokens_failure(self):
+        """Test token estimation error handling."""
+
+        async def run_test():
+            request_data = {"messages": [{"role": "user", "content": "Test"}]}
+
+            # Mock failed tokenization response
+            mock_response = AsyncMock()
+            mock_response.status = 500
+            mock_response.text = AsyncMock(return_value="Internal Server Error")
+
+            mock_session = AsyncMock()
+            mock_session.post = AsyncMock(return_value=mock_response)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+
+            with patch("aiohttp.ClientSession", return_value=mock_session):
+                with self.assertRaises(Exception) as context:
+                    await self.engine.estimate_tokens(request_data)
+
+                self.assertIn("Tokenization request failed", str(context.exception))
+
+        asyncio.run(run_test())
+
+    def test_estimate_tokens_network_error(self):
+        """Test token estimation with network error."""
+
+        async def run_test():
+            request_data = {"messages": [{"role": "user", "content": "Test"}]}
+
+            mock_session = AsyncMock()
+            mock_session.post = AsyncMock(
+                side_effect=aiohttp.ClientError("Connection failed")
+            )
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+
+            with patch("aiohttp.ClientSession", return_value=mock_session):
+                with self.assertRaises(Exception) as context:
+                    await self.engine.estimate_tokens(request_data)
+
+                self.assertIn("Token estimation failed", str(context.exception))
+
+        asyncio.run(run_test())
 
     def test_transform_request_removes_unsupported_fields(self):
-        """Test that unsupported fields are removed from requests."""
+        """Test that transform_request removes unsupported fields."""
         request_data = {
-            "messages": [{"role": "user", "content": "Hello"}],
-            "logit_bias": {"123": 0.5},
-            "logprobs": True,
-            "top_logprobs": 5,
-            "user": "test_user",
             "model": "test-model",
-            "stream": False,
+            "messages": [{"role": "user", "content": "Hello"}],
+            "temperature": 0.7,
+            "user": "test-user",
+            "logit_bias": {"50256": -100},
+            "functions": [{"name": "test"}],
+            "function_call": "auto",
+            "tools": [{"type": "function"}],
+            "tool_choice": "auto",
         }
 
         transformed = self.engine.transform_request(request_data)
 
-        # Check unsupported fields are removed
+        # Should keep basic fields
+        self.assertIn("model", transformed)
+        self.assertIn("messages", transformed)
+        self.assertIn("temperature", transformed)
+
+        # Should remove unsupported fields
+        self.assertNotIn("user", transformed)
         self.assertNotIn("logit_bias", transformed)
-        self.assertNotIn("logprobs", transformed)
-        self.assertNotIn("top_logprobs", transformed)
+        self.assertNotIn("functions", transformed)
+        self.assertNotIn("function_call", transformed)
+        self.assertNotIn("tools", transformed)
+        self.assertNotIn("tool_choice", transformed)
+
+    def test_transform_request_does_not_modify_original(self):
+        """Test that transform_request doesn't modify the original dict."""
+        request_data = {
+            "model": "test-model",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "user": "test-user",
+        }
+
+        original_keys = set(request_data.keys())
+        transformed = self.engine.transform_request(request_data)
+
+        # Original should be unchanged
+        self.assertEqual(set(request_data.keys()), original_keys)
+        self.assertIn("user", request_data)
+
+        # Transformed should have removed the field
         self.assertNotIn("user", transformed)
 
-        # Check supported fields remain
-        self.assertIn("messages", transformed)
-        self.assertIn("model", transformed)
-        self.assertIn("stream", transformed)
+    def test_transform_request_with_no_unsupported_fields(self):
+        """Test transform_request with only supported fields."""
+        request_data = {
+            "model": "test-model",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "temperature": 0.7,
+            "max_tokens": 100,
+        }
 
-    def test_transform_response_non_streaming_chat(self):
-        """Test response transformation for non-streaming chat completions."""
+        transformed = self.engine.transform_request(request_data)
+
+        # All fields should be preserved
+        self.assertEqual(set(request_data.keys()), set(transformed.keys()))
+
+    def test_transform_response_passthrough(self):
+        """Test that transform_response passes through data."""
         response_data = {
+            "id": "chatcmpl-123",
+            "object": "chat.completion",
+            "created": 1677652288,
             "choices": [
                 {
                     "index": 0,
-                    "message": {"role": "assistant", "content": "Hello there!"},
+                    "message": {"role": "assistant", "content": "Hello!"},
                     "finish_reason": "stop",
                 }
             ],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
         }
 
         transformed = self.engine.transform_response(response_data)
 
-        # Should have object field added
-        self.assertEqual(transformed["object"], "chat.completion")
-        # Original structure should be preserved
-        self.assertEqual(
-            transformed["choices"][0]["message"]["content"], "Hello there!"
-        )
+        # Should be identical (llama.cpp is already OpenAI-compatible)
+        self.assertEqual(transformed, response_data)
 
-    def test_transform_response_non_streaming_text(self):
-        """Test response transformation for non-streaming text completions."""
-        response_data = {
-            "choices": [
-                {
-                    "index": 0,
-                    "text": "Once upon a time",
-                    "finish_reason": "length",
-                }
-            ],
-            "usage": {"prompt_tokens": 5, "completion_tokens": 15, "total_tokens": 20},
-        }
+    def test_check_health_success_via_health_endpoint(self):
+        """Test health check success using /health endpoint."""
 
-        transformed = self.engine.transform_response(response_data)
+        async def run_test():
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_response.__aexit__ = AsyncMock(return_value=None)
 
-        # Should have object field for text completion
-        self.assertEqual(transformed["object"], "text_completion")
-        # Text field should be preserved
-        self.assertEqual(transformed["choices"][0]["text"], "Once upon a time")
+            mock_session = AsyncMock()
+            mock_session.get = AsyncMock(return_value=mock_response)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
 
-    def test_transform_response_streaming_chat(self):
-        """Test response transformation for streaming chat completions."""
-        response_data = {
-            "choices": [
-                {
-                    "index": 0,
-                    "delta": {"content": "Hello"},
-                    "finish_reason": None,
-                }
-            ],
-            "stream": True,
-        }
+            with patch("aiohttp.ClientSession", return_value=mock_session):
+                is_healthy = await self.engine.check_health(timeout=5.0)
 
-        transformed = self.engine.transform_response(response_data)
-
-        # Should have delta structure
-        self.assertIn("delta", transformed["choices"][0])
-        self.assertEqual(transformed["choices"][0]["delta"]["content"], "Hello")
-
-    def test_transform_response_streaming_text(self):
-        """Test response transformation for streaming text completions."""
-        response_data = {
-            "choices": [
-                {
-                    "index": 0,
-                    "text": "Once",
-                    "finish_reason": None,
-                }
-            ],
-            "stream": True,
-        }
-
-        transformed = self.engine.transform_response(response_data)
-
-        # Should have text field
-        self.assertIn("text", transformed["choices"][0])
-        self.assertEqual(transformed["choices"][0]["text"], "Once")
-
-    def test_get_supported_endpoints(self):
-        """Test that supported endpoints are correctly listed."""
-        endpoints = self.engine.get_supported_endpoints()
-
-        expected_endpoints = [
-            "/v1/chat/completions",
-            "/v1/completions",
-            "/tokenize",
-            "/health",
-        ]
-
-        self.assertEqual(set(endpoints), set(expected_endpoints))
-
-    async def test_check_health_success(self):
-        """Test health check with successful response."""
-        # Mock successful health endpoint response
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={"status": "ok"})
-
-        with patch.object(
-            aiohttp.ClientSession, "get", AsyncMock(return_value=mock_response)
-        ):
-            is_healthy = await self.engine.check_health()
             self.assertTrue(is_healthy)
 
-    async def test_check_health_failure(self):
-        """Test health check with failed response."""
-        # Mock failed health endpoint response
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={"status": "not ok"})
+        asyncio.run(run_test())
 
-        with patch.object(
-            aiohttp.ClientSession, "get", AsyncMock(return_value=mock_response)
-        ):
-            is_healthy = await self.engine.check_health()
+    def test_check_health_fallback_to_models_endpoint(self):
+        """Test health check fallback to /v1/models endpoint."""
+
+        async def run_test():
+            # First call to /health fails, second call to /v1/models succeeds
+            health_response = AsyncMock()
+            health_response.status = 404
+            health_response.__aenter__ = AsyncMock(return_value=health_response)
+            health_response.__aexit__ = AsyncMock(return_value=None)
+
+            models_response = AsyncMock()
+            models_response.status = 200
+            models_response.__aenter__ = AsyncMock(return_value=models_response)
+            models_response.__aexit__ = AsyncMock(return_value=None)
+
+            mock_session = AsyncMock()
+            mock_session.get = AsyncMock(side_effect=[health_response, models_response])
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+
+            with patch("aiohttp.ClientSession", return_value=mock_session):
+                is_healthy = await self.engine.check_health(timeout=5.0)
+
+            self.assertTrue(is_healthy)
+
+        asyncio.run(run_test())
+
+    def test_check_health_failure_both_endpoints(self):
+        """Test health check failure when both endpoints fail."""
+
+        async def run_test():
+            mock_response = AsyncMock()
+            mock_response.status = 500
+            mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_response.__aexit__ = AsyncMock(return_value=None)
+
+            mock_session = AsyncMock()
+            mock_session.get = AsyncMock(return_value=mock_response)
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+
+            with patch("aiohttp.ClientSession", return_value=mock_session):
+                is_healthy = await self.engine.check_health(timeout=5.0)
+
             self.assertFalse(is_healthy)
 
-    async def test_check_health_timeout(self):
-        """Test health check when server times out."""
-        with patch.object(
-            aiohttp.ClientSession, "get", AsyncMock(side_effect=asyncio.TimeoutError())
-        ):
-            # Should fall back to generic health check
-            with patch.object(
-                EngineClient, "check_health", AsyncMock(return_value=False)
-            ):
-                is_healthy = await self.engine.check_health()
-                self.assertFalse(is_healthy)
+        asyncio.run(run_test())
 
-    async def test_forward_request_success(self):
-        """Test successful request forwarding."""
-        endpoint = "/v1/chat/completions"
-        request_data = {"messages": [{"role": "user", "content": "Hello"}]}
-        timeout = 30.0
+    def test_check_health_timeout(self):
+        """Test health check with timeout."""
 
-        # Mock the transformed request and response
-        transformed_request = {"messages": [{"role": "user", "content": "Hello"}]}
-        mock_response = MagicMock(spec=aiohttp.ClientResponse)
+        async def run_test():
+            mock_session = AsyncMock()
+            mock_session.get = AsyncMock(side_effect=asyncio.TimeoutError())
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
 
-        with patch.object(
-            self.engine, "transform_request", return_value=transformed_request
-        ):
-            with patch.object(
-                aiohttp.ClientSession, "post", AsyncMock(return_value=mock_response)
-            ):
-                async with aiohttp.ClientSession() as session:
-                    response = await self.engine.forward_request(
-                        session=session,
-                        endpoint=endpoint,
-                        request_data=request_data,
-                        timeout=timeout,
-                    )
-                    self.assertEqual(response, mock_response)
+            with patch("aiohttp.ClientSession", return_value=mock_session):
+                is_healthy = await self.engine.check_health(timeout=1.0)
 
-    async def test_forward_request_unsupported_endpoint(self):
-        """Test request forwarding with unsupported endpoint."""
-        endpoint = "/unsupported"
-        request_data = {"test": "data"}
+            self.assertFalse(is_healthy)
 
-        with self.assertRaises(ValueError):
-            async with aiohttp.ClientSession() as session:
-                await self.engine.forward_request(
-                    session=session,
-                    endpoint=endpoint,
-                    request_data=request_data,
-                )
+        asyncio.run(run_test())
 
-    async def test_forward_request_http_error(self):
-        """Test request forwarding when HTTP request fails."""
-        endpoint = "/v1/chat/completions"
-        request_data = {"messages": [{"role": "user", "content": "Hello"}]}
+    def test_check_health_network_error(self):
+        """Test health check with network error."""
 
-        with patch.object(
-            aiohttp.ClientSession, "post", AsyncMock(side_effect=aiohttp.ClientError())
-        ):
-            with self.assertRaises(aiohttp.ClientError):
-                async with aiohttp.ClientSession() as session:
-                    await self.engine.forward_request(
-                        session=session,
-                        endpoint=endpoint,
-                        request_data=request_data,
-                    )
+        async def run_test():
+            mock_session = AsyncMock()
+            mock_session.get = AsyncMock(
+                side_effect=aiohttp.ClientError("Connection refused")
+            )
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
 
-    def test_init_with_custom_logger(self):
-        """Test initialization with custom logger."""
-        custom_logger = MagicMock()
-        engine = LlamaCppEngine(base_url=self.base_url, logger=custom_logger)
-        self.assertEqual(engine.logger, custom_logger)
+            with patch("aiohttp.ClientSession", return_value=mock_session):
+                is_healthy = await self.engine.check_health(timeout=5.0)
 
-    def test_init_without_logger(self):
-        """Test initialization without custom logger."""
-        engine = LlamaCppEngine(base_url=self.base_url)
-        self.assertEqual(engine.logger.name, "LlamaCppEngine")
+            self.assertFalse(is_healthy)
+
+        asyncio.run(run_test())
+
+    def test_forward_request(self):
+        """Test forward_request method."""
+
+        async def run_test():
+            request_data = {
+                "model": "test-model",
+                "messages": [{"role": "user", "content": "Hello"}],
+            }
+
+            mock_response = AsyncMock()
+            mock_response.status = 200
+
+            mock_session = AsyncMock()
+            mock_session.post = AsyncMock(return_value=mock_response)
+
+            response = await self.engine.forward_request(
+                mock_session, "/v1/chat/completions", request_data
+            )
+
+            self.assertEqual(response, mock_response)
+            mock_session.post.assert_called_once()
+
+            # Verify URL construction
+            call_args = mock_session.post.call_args
+            self.assertEqual(call_args[0][0], f"{self.base_url}/v1/chat/completions")
+
+        asyncio.run(run_test())
 
 
 if __name__ == "__main__":
