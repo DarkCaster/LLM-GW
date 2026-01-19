@@ -3,6 +3,7 @@ import sys
 import shutil
 import asyncio
 import aiohttp
+import python_lua_helper
 
 # imports from my subpackages
 import config
@@ -12,7 +13,7 @@ from models import ModelSelector
 from server import RequestHandler, GatewayServer
 
 
-async def async_main(cfg):
+async def async_main(cfg: python_lua_helper.PyLuaHelper):
     """
     Async main function that sets up and runs the server.
 
