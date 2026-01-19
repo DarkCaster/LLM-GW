@@ -3,6 +3,7 @@
 import aiohttp
 import asyncio
 import python_lua_helper
+import sys
 from utils.logger import get_logger
 from typing import Optional, Dict, Any
 from .engine_client import EngineClient
@@ -92,9 +93,68 @@ class EngineManager:
         Returns:
             True if current engine is llamacpp type (stub implementation)
         """
-        # Stub implementation - for now just return true if engine is llamacpp
-        if self._current_engine_type == "llama.cpp":
-            return True
+        if not self._current_config or not required_config:
+            return False
+        # check cases when we requested config context_estimation
+        if required_config.get("operation", "unknown") == "context_estimation":
+            if self._current_config.get("operation", "unknown") == "context_estimation":
+                # currently loaded model was already configured specifically for context_estimation
+                return True
+            else:
+                # check can we actually use currently loaded model configuration for context estimation
+                # get variant index from current configuration (return false if no index)
+                variant_index = self._current_config.get("variant_index")
+                if variant_index is None:
+                    return False
+                # get model index from cfg for current model name, return false if we cannot detect it (log internal error)
+                model_index = None
+                for i in self.cfg.get_table_seq("models"):
+                    if self.cfg.get(f"models.{i}.name") == self._current_model_name:
+                        model_index = i
+                        break
+                if model_index is None:
+                    self.logger.error(
+                        f"Internal error: Model '{self._current_model_name}' not found in configuration"
+                    )
+                    return False
+                # get `tokenize` value from config for model with known index and variant index, return false if tokenize is false
+                if not self.cfg.get_bool(
+                    f"models.{model_index}.variants.{variant_index}.tokenize", False
+                ):
+                    return False
+                # currently loaded model is suitable
+                return True
+        elif required_config.get("operation", "unknown") == "text_query":
+            if self._current_config.get("operation", "unknown") == "text_query":
+                # check can we actually use currently loaded model configuration for text query
+                context_required = required_config.get(
+                    "context_size_required", sys.maxsize
+                )
+                # get variant index from current configuration (return false if no index)
+                variant_index = self._current_config.get("variant_index")
+                if variant_index is None:
+                    return False
+                # get model index from cfg for current model name, return false if we cannot detect it (log internal error)
+                model_index = None
+                for i in self.cfg.get_table_seq("models"):
+                    if self.cfg.get(f"models.{i}.name") == self._current_model_name:
+                        model_index = i
+                        break
+                if model_index is None:
+                    self.logger.error(
+                        f"Internal error: Model '{self._current_model_name}' not found in configuration"
+                    )
+                    return False
+                # get `context` value from cfg (with fallback 0), compare with context_required return false if context value is smaller
+                current_context = self.cfg.get_int(
+                    f"models.{model_index}.variants.{variant_index}.context", 0
+                )
+                if current_context < context_required:
+                    return False
+                # currently loaded model is suitable
+                return True
+
+        # For any other case - currently loaded model is not suitable
         return False
 
     async def ensure_engine(
