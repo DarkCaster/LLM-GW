@@ -43,3 +43,4 @@ echo Starting up
 uv run "%script_dir%main.py" %*
 
 endlocal
+pause

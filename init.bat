@@ -54,3 +54,4 @@ RMDIR /S /Q "%py_dir%\cache"
 
 echo Install complete
 endlocal
+pause
