@@ -298,21 +298,10 @@ Here you need to implement `server/` sub-package according to the plan below.
 
 **Implementation Details:**
 
-- Modify existing `main()` function:
-  - After loading configuration, create `GatewayServer(cfg)`
-  - Replace placeholder comment `# start server here and wait for interrupt` with:
-    - `await server.run()`
-  - Make `main()` async: `async def main():`
-  - Add proper signal handling for graceful shutdown (SIGINT, SIGTERM)
-  - In finally block:
-    - Call `await server.stop()` before cleanup
-  - Handle asyncio properly:
-    - If script run directly, use `asyncio.run(main())`
-- Add signal handlers:
-  - Register handlers for SIGINT and SIGTERM
-  - Set flag to trigger graceful shutdown
-  - Server should detect flag and stop gracefully
-
-**Dependencies:** `asyncio`, `signal`, `server.GatewayServer`
-
-**Why:** Final integration step that creates a runnable application.
+- Modify existing `main()` function, entry point of the LLM‑Gateway application:
+  - After parsing lua configuration, create main asyncio loop `async_main`
+- Inside `async_main`:
+  - Declare `aiohttp.ClientSession`
+  - Create instances of `EngineManager`, `ModelSelector`, `RequestHandler`, `GatewayServer` and wire them together
+  - Run server with `await gateway_server.run()`
+  - Add keyboard-interrupt amd exception handling
