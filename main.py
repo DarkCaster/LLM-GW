@@ -1,13 +1,45 @@
 import argparse
-import os
 import sys
 import shutil
-import logging
-from pathlib import Path
+import asyncio
+import aiohttp
 
 # imports from my subpackages
 import config
 from utils.logger import setup_logging, get_logger
+from engine import EngineManager
+from models import ModelSelector
+from server import RequestHandler, GatewayServer
+
+
+async def async_main(cfg):
+    """
+    Async main function that sets up and runs the server.
+
+    Args:
+        cfg: PyLuaHelper configuration object
+    """
+    logger = get_logger(__name__)
+
+    # Create aiohttp ClientSession for HTTP communication
+    async with aiohttp.ClientSession() as session:
+        # Initialize components
+        engine_manager = EngineManager(session, cfg)
+        model_selector = ModelSelector(engine_manager, cfg)
+        request_handler = RequestHandler(model_selector, cfg)
+        gateway_server = GatewayServer(request_handler, cfg)
+
+        try:
+            # Run the server (blocks until interrupted)
+            await gateway_server.run()
+        except KeyboardInterrupt:
+            logger.info("Received keyboard interrupt")
+        except Exception as e:
+            logger.error(f"Server error: {e}", exc_info=True)
+            raise
+        finally:
+            # Shutdown engine manager
+            await engine_manager.shutdown()
 
 
 def main():
@@ -38,13 +70,15 @@ def main():
 
     try:
         logger.info("Starting LLM gateway")
-        # start server here and wait for interrupt
+        # Run the async main function
+        asyncio.run(async_main(cfg, temp_dir))
+    except KeyboardInterrupt:
+        logger.info("Interrupted by user")
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+        logger.error(f"Unexpected error: {e}", exc_info=True)
         sys.exit(1)
     finally:
         logger.info("Stopping LLM gateway")
-        # add any server termination tasks here
         temp_cleanup()
 
 
