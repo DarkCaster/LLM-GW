@@ -41,7 +41,7 @@ class EngineProcess:
         Spawns the engine binary with configured arguments and sets up
         logging of stdout/stderr.
         """
-        if self._process is not None and self.is_running():
+        if self._process is not None and self.is_running:
             self.logger.warning("Process is already running")
             return
 
@@ -86,7 +86,7 @@ class EngineProcess:
             self.logger.debug("No process to stop")
             return
 
-        if not self.is_running():
+        if not self.is_running:
             self.logger.debug("Process is not running")
             self._cleanup()
             return
