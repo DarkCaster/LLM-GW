@@ -99,17 +99,20 @@ class EngineManager:
             True if current engine is llamacpp type (stub implementation)
         """
         if not self._current_config or not required_config:
+            self.logger.info("No engine running")
             return False
         # check cases when we requested config context_estimation
         if required_config.get("operation", "unknown") == "context_estimation":
             if self._current_config.get("operation", "unknown") == "context_estimation":
                 # currently loaded model was already configured specifically for context_estimation
+                self.logger.info("Running engine was already configured for context estimation, reusing")
                 return True
             else:
                 # check can we actually use currently loaded model configuration for context estimation
                 # get variant index from current configuration (return false if no index)
                 variant_index = self._current_config.get("variant_index")
                 if variant_index is None:
+                    self.logger.info("No variant index detected for running engine")
                     return False
                 # get model index from cfg for current model name, return false if we cannot detect it
                 model_index = self._get_model_index(self._current_model_name, False)
@@ -120,11 +123,18 @@ class EngineManager:
                 if not self.cfg.get_bool(
                     f"models.{model_index}.variants.{variant_index}.tokenize", False
                 ):
+                    self.logger.info("Running engine do not support tokenization queries")
                     return False
                 # currently loaded model is suitable
+                self.logger.info("Currently running engine is suitable for context estimation, reusing")
                 return True
         elif required_config.get("operation", "unknown") == "text_query":
-            if self._current_config.get("operation", "unknown") == "text_query":
+            # we can use model loaded
+            if (
+                self._current_config.get("operation", "unknown") == "text_query"
+                or self._current_config.get("operation", "unknown")
+                == "context_estimation"
+            ):
                 # check can we actually use currently loaded model configuration for text query
                 context_required = required_config.get(
                     "context_size_required", sys.maxsize
@@ -132,6 +142,7 @@ class EngineManager:
                 # get variant index from current configuration (return false if no index)
                 variant_index = self._current_config.get("variant_index")
                 if variant_index is None:
+                    self.logger.info("No variant index detected for running engine")
                     return False
                 # get model index from cfg for current model name, return false if we cannot detect it
                 model_index = self._get_model_index(self._current_model_name, False)
@@ -143,6 +154,7 @@ class EngineManager:
                     f"models.{model_index}.variants.{variant_index}.context", 0
                 )
                 if current_context < context_required:
+                    self.logger.info("Currently running engine context size is not sufficient for text query")
                     return False
                 # currently loaded model is suitable
                 return True

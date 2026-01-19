@@ -44,7 +44,7 @@ class ModelSelector:
         self.logger.info(f"Selecting suitable configuration for model '{model_name}'")
 
         # Construct required_config for context estimation
-        required_config = {
+        estimation_config = {
             "operation": "context_estimation",
             "context_size_required": 0,
         }
@@ -52,7 +52,7 @@ class ModelSelector:
         # Get engine client for context size estimation
         self.logger.info("Getting engine client for context estimation")
         estimation_client = await self.engine_manager.ensure_engine(
-            model_name, required_config
+            model_name, estimation_config
         )
 
         # Estimate tokens
@@ -61,7 +61,7 @@ class ModelSelector:
         self.logger.info(f"Context size required: {context_size_required} tokens")
 
         # Construct required_config for final operation
-        required_config = {
+        text_query_config = {
             "operation": "text_query",
             "context_size_required": context_size_required,
         }
@@ -69,13 +69,13 @@ class ModelSelector:
         # Get engine client for final operation
         self.logger.info("Getting engine client for text query")
         final_client = await self.engine_manager.ensure_engine(
-            model_name, required_config
+            model_name, text_query_config
         )
 
         if final_client is None:
             raise ValueError(f"Failed to get engine client for model '{model_name}'")
 
-        variant_index = required_config.get("variant_index", 0)
+        variant_index = text_query_config.get("variant_index", 0)
         self.logger.info(
             f"Successfully selected and loaded variant {variant_index} for model '{model_name}'"
         )
