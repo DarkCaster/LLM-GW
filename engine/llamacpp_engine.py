@@ -114,7 +114,7 @@ class LlamaCppEngine(EngineClient):
                     self.logger.debug(f"Health check passed for {self.base_url}")
                     return True
                 else:
-                    self.logger.warning(
+                    self.logger.debug(
                         f"Health check failed with status {response.status} for {self.base_url}"
                     )
                     return False
