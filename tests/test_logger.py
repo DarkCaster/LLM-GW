@@ -15,6 +15,7 @@ class TestLogger(unittest.TestCase):
 
     def test_get_logger_returns_correct_logger(self):
         """Test that get_logger returns a logger with the correct name."""
+        setup_logging()
         logger_name = "test.module"
         logger = get_logger(logger_name)
 
@@ -26,6 +27,7 @@ class TestLogger(unittest.TestCase):
 
     def test_get_logger_same_name_returns_same_instance(self):
         """Test that calling get_logger with same name returns same instance."""
+        setup_logging()
         logger1 = get_logger("test.module")
         logger2 = get_logger("test.module")
 

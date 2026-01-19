@@ -2,6 +2,8 @@ import logging
 import sys
 from typing import Optional
 
+loggerInitialized = False
+
 
 def setup_logging(
     level: int = logging.INFO,
@@ -16,6 +18,7 @@ def setup_logging(
         format_string: Custom format string for log messages
         date_format: Custom date format string
     """
+    global loggerInitialized
     if format_string is None:
         format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
@@ -40,6 +43,7 @@ def setup_logging(
 
     # Add our console handler
     root_logger.addHandler(console_handler)
+    loggerInitialized = True
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -52,8 +56,8 @@ def get_logger(name: str) -> logging.Logger:
     Returns:
         Configured logger instance
     """
-    return logging.getLogger(name)
-
-
-# Setup default logging when module is imported
-setup_logging()
+    global loggerInitialized
+    if loggerInitialized:
+        return logging.getLogger(name)
+    else:
+        raise SystemError("Initialize logger before use!")

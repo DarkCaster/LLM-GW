@@ -20,7 +20,7 @@ async def async_main(cfg: python_lua_helper.PyLuaHelper):
     Args:
         cfg: PyLuaHelper configuration object
     """
-    logger = get_logger(__name__)
+    logger = get_logger("Main(async)")
 
     # Create aiohttp ClientSession for HTTP communication
     async with aiohttp.ClientSession() as session:
@@ -52,7 +52,7 @@ def main():
 
     # Setup logging initially with default level
     setup_logging()
-    logger = get_logger(__name__)
+    logger = get_logger("Main")
 
     # Load configuration
     try:
