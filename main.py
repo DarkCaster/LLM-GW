@@ -71,7 +71,7 @@ def main():
     try:
         logger.info("Starting LLM gateway")
         # Run the async main function
-        asyncio.run(async_main(cfg, temp_dir))
+        asyncio.run(async_main(cfg))
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
     except Exception as e:
