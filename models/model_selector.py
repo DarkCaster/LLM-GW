@@ -46,6 +46,7 @@ class ModelSelector:
         # Construct required_config for context estimation
         required_config = {
             "operation": "context_estimation",
+            "context_size_required": 0,
         }
 
         # Get engine client for context size estimation
