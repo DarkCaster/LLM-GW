@@ -46,8 +46,7 @@ Main HTTP server implementation that handles incoming requests.
     - Parse and validate incoming JSON requests
     - Extract model name
     - Coordinate with ModelSelector to choose appropriate model variant
-    - Coordinate with EngineManager to ensure correct engine is running
-    - Forward request to engine via EngineClient
+    - Forward request to engine via currently running EngineClient
     - Stream response back to client
     - Handle errors and return appropriate HTTP status codes
 
