@@ -191,6 +191,8 @@ Here you need to implement `models/` sub-package according to the plan below.
 
 **Why:** This implements the intelligence of variant selection. It requires the engine layer to be complete (for tokenization), but is independent of the HTTP server layer.
 
+NOTE: `request_data` dict produced from `await request.json()` where `request` is `web.Request` type
+
 ## Step 2: `models/__init__.py` - Models Package Interface
 
 **Purpose:** Expose public API of the models package.
