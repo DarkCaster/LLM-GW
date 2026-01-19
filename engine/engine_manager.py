@@ -116,7 +116,7 @@ class EngineManager:
                     return False
                 # get model index from cfg for current model name, return false if we cannot detect it
                 model_index = self._get_model_index(self._current_model_name, False)
-                if model_index > -1:
+                if model_index < 0:
                     self.logger.error("Internal error!")
                     return False
                 # get `tokenize` value from config for model with known index and variant index, return false if tokenize is false
@@ -146,7 +146,7 @@ class EngineManager:
                     return False
                 # get model index from cfg for current model name, return false if we cannot detect it
                 model_index = self._get_model_index(self._current_model_name, False)
-                if model_index > -1:
+                if model_index < 0:
                     self.logger.error("Internal error!")
                     return False
                 # get `context` value from cfg (with fallback 0), compare with context_required return false if context value is smaller
