@@ -242,7 +242,7 @@ Here you need to implement `server/` sub-package according to the plan below.
 
 **Dependencies:** `aiohttp`, `json`, `logging`, `models.ModelSelector`, `engine.EngineManager`
 
-**Why:** This is the business logic layer that connects all components. It requires both model selection and engine management to be complete.
+**Why:** This is the business logic layer that connects core components. It requires both model selection and engine management to be complete.
 
 ## Step 2: `server/gateway_server.py` - GatewayServer Class
 
@@ -273,7 +273,7 @@ Here you need to implement `server/` sub-package according to the plan below.
 
 **Dependencies:** `aiohttp`, `asyncio`, `logging`, `server.RequestHandler`, `models.ModelSelector`, `engine.EngineManager`, `config.ConfigLoader`
 
-**Why:** This is the entry point that assembles all components and starts the HTTP server.
+**Why:** This is the HTTP server entry point.
 
 ## Step 3: `server/__init__.py` - Server Package Interface
 
