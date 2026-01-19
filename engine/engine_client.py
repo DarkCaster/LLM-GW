@@ -29,7 +29,7 @@ class EngineClient(ABC):
 
     @abstractmethod
     async def forward_request(
-        self, session: aiohttp.ClientSession, url: str, request_data: dict
+        self, url: str, request_data: dict
     ) -> aiohttp.ClientResponse:
         """
         Process and forward request to the engine.
@@ -38,7 +38,6 @@ class EngineClient(ABC):
         and may also transform the response before returning.
 
         Args:
-            session: aiohttp ClientSession for making HTTP requests
             url: URL of the request to forwarding, without domain and protocol, example: /v1/chat/completions
             request_data: Dictionary containing the request data
 
