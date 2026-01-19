@@ -1,9 +1,9 @@
 # server/request_handler.py
 
-import logging
 import aiohttp.web
-from models import ModelSelector
 import python_lua_helper
+from utils.logger import get_logger
+from models import ModelSelector
 
 
 class RequestHandler:
@@ -25,7 +25,7 @@ class RequestHandler:
         """
         self.model_selector = model_selector
         self.cfg = cfg
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = get_logger(self.__class__.__name__)
         self.logger.info("RequestHandler initialized")
 
     async def handle_models_list(

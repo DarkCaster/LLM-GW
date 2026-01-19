@@ -2,9 +2,9 @@
 
 import asyncio
 import asyncio.subprocess
-import logging
-from typing import List, Optional
 import time
+from utils.logger import get_logger
+from typing import List, Optional
 
 
 class EngineProcess:
@@ -26,7 +26,7 @@ class EngineProcess:
         self.binary_path = binary_path
         self.args = args
         self.work_dir = work_dir
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = get_logger(self.__class__.__name__)
 
         self._process: Optional[asyncio.subprocess.Process] = None
         self._status = "stopped"

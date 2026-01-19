@@ -1,10 +1,10 @@
 # server/gateway_server.py
 
-import logging
 import asyncio
 import aiohttp.web
-from typing import List, Optional, Tuple
 import python_lua_helper
+from utils.logger import get_logger
+from typing import List, Optional, Tuple
 from .request_handler import RequestHandler
 
 
@@ -25,7 +25,7 @@ class GatewayServer:
         """
         self.request_handler = request_handler
         self.cfg = cfg
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = get_logger(self.__class__.__name__)
 
         # Server state
         self.app: Optional[aiohttp.web.Application] = None

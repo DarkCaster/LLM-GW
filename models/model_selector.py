@@ -1,8 +1,8 @@
 # models/model_selector.py
 
-import logging
-from typing import List
 import python_lua_helper
+from utils.logger import get_logger
+from typing import List
 from engine import EngineManager, EngineClient
 
 
@@ -23,7 +23,7 @@ class ModelSelector:
         """
         self.engine_manager = engine_manager
         self.cfg = cfg
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = get_logger(self.__class__.__name__)
         self.logger.info("ModelSelector initialized")
 
     async def select_variant(self, model_name: str, request_data: dict) -> EngineClient:

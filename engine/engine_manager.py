@@ -2,8 +2,8 @@
 
 import aiohttp
 import asyncio
-import logging
 import python_lua_helper
+from utils.logger import get_logger
 from typing import Optional, Dict, Any
 from .engine_client import EngineClient
 from .llamacpp_engine import LlamaCppEngine
@@ -31,7 +31,7 @@ class EngineManager:
             return
 
         self._initialized = True
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = get_logger(self.__class__.__name__)
         self.session = session
         self.cfg = cfg
 
