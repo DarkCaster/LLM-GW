@@ -169,29 +169,32 @@ class RequestHandler:
                     status=502,
                 )
             # Return the engine response
-            content_type = engine_response.headers.get("Content-Type", "")
-            if "text/event-stream" in content_type or request_data.get("stream", False):
-                # Streaming response
-                self.logger.debug("Returning streaming response")
-                response = aiohttp.web.StreamResponse(
-                    status=engine_response.status,
-                    headers={"Content-Type": content_type},
-                )
-                await response.prepare(request)
-                # Stream the response
-                async for chunk in engine_response.content.iter_any():
-                    await response.write(chunk)
-                await response.write_eof()
-                return response
-            else:
-                # Non-streaming response
-                self.logger.debug("Returning non-streaming response")
-                body = await engine_response.read()
-                return aiohttp.web.Response(
-                    body=body,
-                    status=engine_response.status,
-                    headers={"Content-Type": content_type},
-                )
+            try:
+                content_type = engine_response.headers.get("Content-Type", "")
+                if "text/event-stream" in content_type or request_data.get("stream", False):
+                    # Streaming response
+                    self.logger.debug("Returning streaming response")
+                    response = aiohttp.web.StreamResponse(
+                        status=engine_response.status,
+                        headers={"Content-Type": content_type},
+                    )
+                    await response.prepare(request)
+                    # Stream the response
+                    async for chunk in engine_response.content.iter_any():
+                        await response.write(chunk)
+                    await response.write_eof()
+                    return response
+                else:
+                    # Non-streaming response
+                    self.logger.debug("Returning non-streaming response")
+                    body = await engine_response.read()
+                    return aiohttp.web.Response(
+                        body=body,
+                        status=engine_response.status,
+                        headers={"Content-Type": content_type},
+                    )
+            finally:
+                engine_response.release()
 
         except Exception as e:
             self.logger.error(f"Unexpected error handling request: {e}", exc_info=True)
