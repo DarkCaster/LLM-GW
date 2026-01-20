@@ -2,7 +2,6 @@
 
 import aiohttp
 import asyncio
-import random
 from .engine_client import EngineClient
 
 
@@ -25,19 +24,79 @@ class LlamaCppEngine(EngineClient):
 
     async def estimate_tokens(self, request_data: dict) -> int:
         """
-        Calculate token requirements from incoming request.
-
-        For now, this is a stub that returns a random value between 1 and 512.
-        Will be properly implemented later.
+        Tokenize chat messages and get token requirements from incoming request (including safe margin)
 
         Args:
             request_data: Dictionary containing the request data
 
         Returns:
-            Estimated number of tokens (stub: random value 1-512)
+            Estimated number of context size tokens needed to process request
         """
-        # Stub implementation - will be addressed later
-        return random.randint(1, 512)
+        # Get max_tokens field from request_data
+        max_tokens = request_data.get("max_tokens")
+        if max_tokens is None:
+            max_tokens = request_data.get("max_completion_tokens")
+        if max_tokens is None:
+            self.logger.warning(
+                "No max_tokens or max_completion_tokens in request, defaulting to 512"
+            )
+            max_tokens = 512
+        # Get messages from request_data
+        messages = request_data.get("messages")
+        if messages is None:
+            self.logger.error("No messages field in request_data")
+            return max_tokens + 32
+        # Call /apply-template endpoint
+        apply_template_url = f"{self.base_url}/apply-template"
+        try:
+            async with self.session.post(
+                apply_template_url,
+                json={"messages": messages},
+                headers={"Content-Type": "application/json"},
+                timeout=aiohttp.ClientTimeout(total=60.0),
+            ) as response:
+                if response.status != 200:
+                    self.logger.error(
+                        f"/apply-template returned status {response.status}"
+                    )
+                    return max_tokens + 32
+                template_result = await response.json()
+        except Exception as e:
+            self.logger.error(f"Error calling /apply-template: {e}")
+            return max_tokens + 32
+        # Get prompt field from response
+        prompt = template_result.get("prompt")
+        if prompt is None:
+            self.logger.error("No prompt field in /apply-template response")
+            return max_tokens + 32
+        # Call /tokenize endpoint
+        tokenize_url = f"{self.base_url}/tokenize"
+        try:
+            async with self.session.post(
+                tokenize_url,
+                json={"content": prompt},
+                headers={"Content-Type": "application/json"},
+                timeout=aiohttp.ClientTimeout(total=60.0),
+            ) as response:
+                if response.status != 200:
+                    self.logger.error(f"/tokenize returned status {response.status}")
+                    return max_tokens + 32
+                tokenize_result = await response.json()
+        except Exception as e:
+            self.logger.error(f"Error calling /tokenize: {e}")
+            return max_tokens + 32
+        # Get tokens array from response
+        tokens = tokenize_result.get("tokens")
+        if tokens is None or not isinstance(tokens, list):
+            self.logger.error("No tokens field (or not a list) in /tokenize response")
+            return max_tokens + 32
+        # Calculate total context size needed
+        tokens_count = len(tokens)
+        total_tokens = tokens_count + max_tokens + 32
+        self.logger.debug(
+            f"Token estimation: prompt={tokens_count}, max_tokens={max_tokens}, total={total_tokens}"
+        )
+        return total_tokens
 
     async def forward_request(
         self, path: str, request_data: dict
