@@ -1,5 +1,6 @@
 -- config file checks and asserts
 
+
 -- Helper function to check if a value is of expected type
 local function assert_type(value, expected_type, path)
 	if value ~= nil then
@@ -17,8 +18,18 @@ local function assert_exists(value, path)
 	end
 end
 
+-- Helper function to check if a value is a positive number
+local function assert_positive_number(value, path)
+	if value == nil then
+		error(string.format("Configuration error: missing required field '%s'", path))
+	end
+	if type(value) ~= "number" or value <= 0 then
+		error(string.format("Configuration error at '%s': must be a positive number, got %s", path, value))
+	end
+end
+
 -- Check llama.cpp engine variant
-local function check_llamacpp_variant(variant, model_name, variant_index)
+local function check_llamacpp_variant(variant, model_name, variant_index, model)
 	local base_path = string.format("models.%s.variants[%d]", model_name, variant_index)
 	-- Check binary (mandatory)
 	assert_exists(variant.binary, base_path .. ".binary")
@@ -35,6 +46,14 @@ local function check_llamacpp_variant(variant, model_name, variant_index)
 	-- Check context (mandatory)
 	assert_exists(variant.context, base_path .. ".context")
 	assert_type(variant.context, "number", base_path .. ".context")
+	-- Set defaults for optional timeout parameters
+	variant.health_check_timeout = variant.health_check_timeout or model.health_check_timeout
+	variant.engine_startup_timeout = variant.engine_startup_timeout or model.engine_startup_timeout
+	variant.engine_idle_timeout = variant.engine_idle_timeout or model.engine_idle_timeout
+	-- Validate timeout parameters are positive numbers
+	assert_positive_number(variant.health_check_timeout, base_path .. ".health_check_timeout")
+	assert_positive_number(variant.engine_startup_timeout, base_path .. ".engine_startup_timeout")
+	assert_positive_number(variant.engine_idle_timeout, base_path .. ".engine_idle_timeout")
 end
 
 -- Check model configuration based on engine type
@@ -43,6 +62,14 @@ local function check_model(model, model_name)
 	-- Check engine field (mandatory)
 	assert_exists(model.engine, base_path .. ".engine")
 	assert_type(model.engine, "string", base_path .. ".engine")
+	-- Set defaults for optional timeout parameters
+	model.health_check_timeout = model.health_check_timeout or server.health_check_timeout
+	model.engine_startup_timeout = model.engine_startup_timeout or server.engine_startup_timeout
+	model.engine_idle_timeout = model.engine_idle_timeout or server.engine_idle_timeout
+	-- Validate timeout parameters are positive numbers
+	assert_positive_number(model.health_check_timeout, base_path .. ".health_check_timeout")
+	assert_positive_number(model.engine_startup_timeout, base_path .. ".engine_startup_timeout")
+	assert_positive_number(model.engine_idle_timeout, base_path .. ".engine_idle_timeout")
 	-- Check variants (mandatory)
 	assert_exists(model.variants, base_path .. ".variants")
 	assert_type(model.variants, "table", base_path .. ".variants")
@@ -54,7 +81,7 @@ local function check_model(model, model_name)
 	for i, variant in ipairs(model.variants) do
 		assert_type(variant, "table", base_path .. string.format(".variants[%d]", i))
 		if model.engine == presets.engines.llamacpp then
-			check_llamacpp_variant(variant, model_name, i)
+			check_llamacpp_variant(variant, model_name, i, model)
 		else
 			error(string.format("Configuration error at '%s.engine': unknown engine type '%s'", base_path, model.engine))
 		end
@@ -72,6 +99,15 @@ assert_type(server.listen_v4, "string", "server.listen_v4")
 -- Check listen_v6 (mandatory)
 assert_exists(server.listen_v6, "server.listen_v6")
 assert_type(server.listen_v6, "string", "server.listen_v6")
+
+-- Check health_check_timeout (mandatory)
+assert_positive_number(server.health_check_timeout, "server.health_check_timeout")
+
+-- Check engine_startup_timeout (mandatory)
+assert_positive_number(server.engine_startup_timeout, "server.engine_startup_timeout")
+
+-- Check engine_idle_timeout (mandatory)
+assert_positive_number(server.engine_idle_timeout, "server.engine_idle_timeout")
 
 -- Check models configuration
 assert_exists(models, "models")
