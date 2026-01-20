@@ -96,7 +96,6 @@ class RequestHandler:
                     },
                     status=400,
                 )
-
             # Validate required fields
             if "model" not in request_data:
                 self.logger.error("Missing 'model' field in request")
@@ -109,16 +108,12 @@ class RequestHandler:
                     },
                     status=400,
                 )
-
             # Extract model name
             model_name = request_data["model"]
             self.logger.info(f"Handling request for model '{model_name}'")
-
-            # Extract URL suffix (endpoint)
-            # request.path includes the full path like /v1/chat/completions
-            url = request.path
-            self.logger.debug(f"Request URL: {url}")
-
+            # Extract endpoint
+            path = request.path
+            self.logger.debug(f"Request path: {path}")
             # Select appropriate variant
             try:
                 engine_client = await self.model_selector.select_variant(
@@ -146,10 +141,11 @@ class RequestHandler:
                     },
                     status=500,
                 )
-
             # Forward request to engine
             try:
-                engine_response = await engine_client.forward_request(url, request_data)
+                engine_response = await engine_client.forward_request(
+                    path, request_data
+                )
             except ValueError as e:
                 self.logger.error(f"Request forwarding failed: {e}")
                 return aiohttp.web.json_response(
@@ -172,11 +168,8 @@ class RequestHandler:
                     },
                     status=502,
                 )
-
             # Return the engine response
-            # Check if response is streaming or not
             content_type = engine_response.headers.get("Content-Type", "")
-
             if "text/event-stream" in content_type or request_data.get("stream", False):
                 # Streaming response
                 self.logger.debug("Returning streaming response")
@@ -185,11 +178,9 @@ class RequestHandler:
                     headers={"Content-Type": content_type},
                 )
                 await response.prepare(request)
-
                 # Stream the response
                 async for chunk in engine_response.content.iter_any():
                     await response.write(chunk)
-
                 await response.write_eof()
                 return response
             else:
