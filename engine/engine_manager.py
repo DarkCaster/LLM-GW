@@ -105,19 +105,19 @@ class EngineManager:
         if required_config.get("operation", "unknown") == "context_estimation":
             if self._current_config.get("operation", "unknown") == "context_estimation":
                 # currently loaded model was already configured specifically for context_estimation
-                self.logger.info("Running engine was already configured for context estimation, reusing")
+                self.logger.debug("Running engine was already configured for context estimation, reusing")
                 return True
             else:
                 # check can we actually use currently loaded model configuration for context estimation
                 # get variant index from current configuration (return false if no index)
                 variant_index = self._current_config.get("variant_index")
                 if variant_index is None:
-                    self.logger.info("No variant index detected for running engine")
+                    self.logger.error("No variant index detected for running engine")
                     return False
                 # get model index from cfg for current model name, return false if we cannot detect it
                 model_index = self._get_model_index(self._current_model_name, False)
                 if model_index < 0:
-                    self.logger.error("Internal error!")
+                    self.logger.error("Internal error (1)!")
                     return False
                 # get `tokenize` value from config for model with known index and variant index, return false if tokenize is false
                 if not self.cfg.get_bool(
@@ -126,7 +126,7 @@ class EngineManager:
                     self.logger.info("Running engine do not support tokenization queries")
                     return False
                 # currently loaded model is suitable
-                self.logger.info("Currently running engine is suitable for context estimation, reusing")
+                self.logger.debug("Currently running engine is suitable for context estimation, reusing")
                 return True
         elif required_config.get("operation", "unknown") == "text_query":
             # we can use model loaded
@@ -142,12 +142,12 @@ class EngineManager:
                 # get variant index from current configuration (return false if no index)
                 variant_index = self._current_config.get("variant_index")
                 if variant_index is None:
-                    self.logger.info("No variant index detected for running engine")
+                    self.logger.error("No variant index detected for running engine")
                     return False
                 # get model index from cfg for current model name, return false if we cannot detect it
                 model_index = self._get_model_index(self._current_model_name, False)
                 if model_index < 0:
-                    self.logger.error("Internal error!")
+                    self.logger.error("Internal error (2)!")
                     return False
                 # get `context` value from cfg (with fallback 0), compare with context_required return false if context value is smaller
                 current_context = self.cfg.get_int(
@@ -184,12 +184,12 @@ class EngineManager:
                 # Verify health
                 if self._current_engine_client is not None:
                     if await self._current_engine_client.check_health():
-                        self.logger.info(
+                        self.logger.debug(
                             f"Current engine for model '{model_name}' is already running and healthy"
                         )
                         return self._current_engine_client
                     else:
-                        self.logger.warning(
+                        self.logger.info(
                             f"Current engine for model '{model_name}' failed health check"
                         )
             # Find model in configuration

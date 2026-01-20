@@ -41,7 +41,7 @@ class ModelSelector:
         Raises:
             ValueError: If model not found, engine type not supported, or variant selection fails
         """
-        self.logger.info(f"Selecting suitable configuration for model '{model_name}'")
+        self.logger.debug(f"Selecting suitable configuration for model '{model_name}'")
 
         # Construct required_config for context estimation
         estimation_config = {
@@ -56,7 +56,7 @@ class ModelSelector:
         )
 
         # Estimate tokens
-        self.logger.info("Estimating token requirements")
+        self.logger.debug("Estimating token requirements")
         context_size_required = await estimation_client.estimate_tokens(request_data)
         self.logger.info(f"Context size required: {context_size_required} tokens")
 
@@ -76,7 +76,7 @@ class ModelSelector:
             raise ValueError(f"Failed to get engine client for model '{model_name}'")
 
         variant_index = text_query_config.get("variant_index", 0)
-        self.logger.info(
+        self.logger.debug(
             f"Successfully selected and loaded variant {variant_index} for model '{model_name}'"
         )
         return final_client
