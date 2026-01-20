@@ -40,7 +40,7 @@ class LlamaCppEngine(EngineClient):
         return random.randint(1, 512)
 
     async def forward_request(
-        self, url: str, request_data: dict
+        self, path: str, request_data: dict
     ) -> aiohttp.ClientResponse:
         """
         Forward request to llama.cpp server endpoint.
@@ -49,36 +49,31 @@ class LlamaCppEngine(EngineClient):
         and streaming responses.
 
         Args:
-            url: URL of the request to forwarding, without domain and protocol, example: /v1/chat/completions
+            path: URL path/endpoint of the request to forwarding, example: /v1/chat/completions
             request_data: Dictionary containing the request data
 
         Returns:
-            aiohttp ClientResponse object
+            aiohttp ClientResponse object, do not forget to release it manually after use
 
         Raises:
             ValueError: If endpoint is not /v1/chat/completions
         """
         # Check that this is a chat completions request
-        if url != "/v1/chat/completions":
-            raise ValueError(
-                f"LlamaCppEngine only supports /v1/chat/completions endpoint for now, got: {url}"
+        if path != "/v1/chat/completions":
+            self.logger.error(
+                f"Unsupported URL path/endpoint for LlamaCppEngine: {path}"
             )
-
         # Transform request data
         transformed_data = self._transform_request(request_data)
-
         # Forward the request to llama.cpp server
-        full_url = f"{self.base_url}/v1/chat/completions"
-
+        full_url = f"{self.base_url}{path}"
         self.logger.debug(f"Forwarding request to {full_url}")
-
         # Make the request - let the response stream through
         response = await self.session.post(
             full_url,
             json=transformed_data,
             headers={"Content-Type": "application/json"},
         )
-
         return response
 
     def _transform_request(self, request_data: dict) -> dict:
@@ -105,7 +100,6 @@ class LlamaCppEngine(EngineClient):
             True if engine is healthy, False otherwise
         """
         health_url = f"{self.base_url}/health"
-
         try:
             async with self.session.get(
                 health_url, timeout=aiohttp.ClientTimeout(total=5.0)
