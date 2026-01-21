@@ -285,13 +285,17 @@ class EngineManager:
                 f"Starting engine: binary={binary}, connect={connect_url}, "
                 f"args count={len(args)}"
             )
+            # Get timeouts
+            engine_startup_timeout = self.cfg.get_float(f"{variant_key}.engine_startup_timeout")
+            health_check_timeout = self.cfg.get_float(f"{variant_key}.health_check_timeout")
+            # engine_idle_timeout = self.cfg.get_float(f"{variant_key}.engine_idle_timeout")
             # Create and start EngineProcess
-            engine_client = LlamaCppEngine(self.session, connect_url)
+            engine_client = LlamaCppEngine(self.session, connect_url, health_check_timeout)
             engine_process = EngineProcess(binary, args)
             await engine_process.start()
             # Wait for engine to become ready
             try:
-                await self._wait_for_engine_ready(engine_client, timeout=60.0)
+                await self._wait_for_engine_ready(engine_client, timeout=engine_startup_timeout)
             except Exception as e:
                 # If engine fails to become ready, stop the process
                 self.logger.error(f"Engine failed to become ready: {e}")

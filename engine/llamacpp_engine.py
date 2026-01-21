@@ -10,7 +10,7 @@ class LlamaCppEngine(EngineClient):
     Concrete implementation of EngineClient for llama.cpp engines.
     """
 
-    def __init__(self, session: aiohttp.ClientSession, base_url: str):
+    def __init__(self, session: aiohttp.ClientSession, base_url: str, health_check_timeout: float):
         """
         Initialize LlamaCppEngine with base URL.
 
@@ -18,6 +18,7 @@ class LlamaCppEngine(EngineClient):
             base_url: Base URL for the llama.cpp server (e.g., "http://127.0.0.1:8080")
         """
         super().__init__()
+        self.health_check_timeout = health_check_timeout
         self.session = session
         self.base_url = base_url.rstrip("/")
         self.logger.info(f"Initialized LlamaCppEngine with base_url: {self.base_url}")
@@ -161,7 +162,7 @@ class LlamaCppEngine(EngineClient):
         health_url = f"{self.base_url}/health"
         try:
             async with self.session.get(
-                health_url, timeout=aiohttp.ClientTimeout(total=5.0)
+                health_url, timeout=aiohttp.ClientTimeout(total=self.health_check_timeout)
             ) as response:
                 if response.status == 200:
                     self.logger.debug(f"Health check passed for {self.base_url}")
