@@ -36,8 +36,6 @@ class EngineManager:
         self._current_config: Optional[Dict[str, Any]] = None
         self._current_engine_type: Optional[str] = None
         self._current_idle_timeout: float = sys.float_info.max
-        # Lock to prevent concurrent engine switches
-        self._lock = asyncio.Lock()
         self.logger.info("EngineManager initialized")
 
     def _check_model_configuration(
@@ -179,56 +177,53 @@ class EngineManager:
             ValueError: If model not found, engine type not supported, or config invalid
             TimeoutError: If engine fails to become ready
         """
-        async with self._lock:
-            # Check if current engine configuration is suitable
-            if self._check_model_configuration(model_name, required_config):
-                # Verify health
-                if self._current_engine_client is not None:
-                    if await self._current_engine_client.check_health():
-                        self.logger.debug(
-                            f"Current engine for model '{model_name}' is already running and healthy"
-                        )
-                        return self._current_engine_client, self._current_idle_timeout
-                    else:
-                        self.logger.info(
-                            f"Current engine for model '{model_name}' failed health check"
-                        )
-            # Find model in configuration
-            model_index = self._get_model_index(model_name, True)
-            # Get engine type for the model
-            cfg_engine_type = self.cfg.get(f"models.{model_index}.engine")
-            # NOTE: engine specifig setup here:
-            if cfg_engine_type == "llama.cpp":
-                # Iterate over model's variants and select first suitable variant
-                context_required = required_config.get(
-                    "context_size_required", sys.maxsize
+        # Check if current engine configuration is suitable
+        if self._check_model_configuration(model_name, required_config):
+            # Verify health
+            if self._current_engine_client is not None:
+                if await self._current_engine_client.check_health():
+                    self.logger.debug(
+                        f"Current engine for model '{model_name}' is already running and healthy"
+                    )
+                    return self._current_engine_client, self._current_idle_timeout
+                else:
+                    self.logger.info(
+                        f"Current engine for model '{model_name}' failed health check"
+                    )
+        # Find model in configuration
+        model_index = self._get_model_index(model_name, True)
+        # Get engine type for the model
+        cfg_engine_type = self.cfg.get(f"models.{model_index}.engine")
+        # NOTE: engine specifig setup here:
+        if cfg_engine_type == "llama.cpp":
+            # Iterate over model's variants and select first suitable variant
+            context_required = required_config.get("context_size_required", sys.maxsize)
+            variant_index = None
+            for i in self.cfg.get_table_seq(f"models.{model_index}.variants"):
+                variant_context = self.cfg.get_int(
+                    f"models.{model_index}.variants.{i}.context", 0
                 )
-                variant_index = None
-                for i in self.cfg.get_table_seq(f"models.{model_index}.variants"):
-                    variant_context = self.cfg.get_int(
-                        f"models.{model_index}.variants.{i}.context", 0
+                if variant_context >= context_required:
+                    variant_index = i
+                    self.logger.info(
+                        f"Selected variant {variant_index} with context size {variant_context}"
                     )
-                    if variant_context >= context_required:
-                        variant_index = i
-                        self.logger.info(
-                            f"Selected variant {variant_index} with context size {variant_context}"
-                        )
-                        break
-                if variant_index is None:
-                    raise ValueError(
-                        f"No suitable variant found for model '{model_name}' "
-                        f"with required context size {context_required}"
-                    )
-                required_config["variant_index"] = variant_index
-            else:
-                raise ValueError(f"Engine type '{cfg_engine_type}' not supported.")
-            # Stop and start selected engine
-            self.logger.info(f"Starting new engine for model '{model_name}'")
-            await self._stop_current_engine()
-            await self._start_new_engine(model_name, required_config, cfg_engine_type)
-            return self._current_engine_client, self._current_idle_timeout
+                    break
+            if variant_index is None:
+                raise ValueError(
+                    f"No suitable variant found for model '{model_name}' "
+                    f"with required context size {context_required}"
+                )
+            required_config["variant_index"] = variant_index
+        else:
+            raise ValueError(f"Engine type '{cfg_engine_type}' not supported.")
+        # Stop and start selected engine
+        self.logger.info(f"Starting new engine for model '{model_name}'")
+        await self.stop_current_engine()
+        await self._start_new_engine(model_name, required_config, cfg_engine_type)
+        return self._current_engine_client, self._current_idle_timeout
 
-    async def _stop_current_engine(self) -> None:
+    async def stop_current_engine(self) -> None:
         """
         Stop the currently running engine.
         """
@@ -369,6 +364,5 @@ class EngineManager:
         Shutdown the engine manager and stop any running engines.
         """
         self.logger.info("Shutting down EngineManager")
-        async with self._lock:
-            await self._stop_current_engine()
+        await self.stop_current_engine()
         self.logger.info("EngineManager shutdown complete")

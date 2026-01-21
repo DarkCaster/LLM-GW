@@ -27,7 +27,7 @@ async def async_main(cfg: python_lua_helper.PyLuaHelper):
         # Initialize components
         engine_manager = EngineManager(session, cfg)
         model_selector = ModelSelector(engine_manager, cfg)
-        request_handler = RequestHandler(model_selector, cfg)
+        request_handler = RequestHandler(model_selector, engine_manager, cfg)
         gateway_server = GatewayServer(request_handler, cfg)
 
         try:
@@ -39,6 +39,7 @@ async def async_main(cfg: python_lua_helper.PyLuaHelper):
             logger.error(f"Server error: {e}", exc_info=True)
             raise
         finally:
+            # TODO: shutdown idle watchdog
             # Shutdown engine manager
             await engine_manager.shutdown()
 

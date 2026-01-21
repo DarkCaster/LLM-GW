@@ -4,8 +4,10 @@ import asyncio
 import sys
 import aiohttp.web
 import python_lua_helper
-from utils.logger import get_logger
+
+from engine import EngineManager
 from models import ModelSelector
+from utils.logger import get_logger
 
 
 class RequestHandler:
@@ -16,6 +18,7 @@ class RequestHandler:
     def __init__(
         self,
         model_selector: ModelSelector,
+        engine_manager: EngineManager,
         cfg: python_lua_helper.PyLuaHelper,
     ):
         """
@@ -26,6 +29,7 @@ class RequestHandler:
             cfg: PyLuaHelper configuration object
         """
         self.model_selector = model_selector
+        self.engine_manager = engine_manager
         self.cfg = cfg
         self.idle_timeout = sys.float_info.max
         self.request_lock = asyncio.Lock()
@@ -91,6 +95,7 @@ class RequestHandler:
             )
         async with self.request_lock:
             self.logger.debug("Acquired request lock, processing request")
+            # TODO: disarm idle watchdog
             try:
                 # Parse JSON body
                 try:
@@ -226,5 +231,16 @@ class RequestHandler:
                 )
 
             finally:
-                # TODO: reset idle-watchdog here to self.idle_timeout
+                # TODO: rearm idle-watchdog here to self.idle_timeout
                 self.logger.debug("Releasing request lock")
+
+    async def handle_idle_timeout(self):
+        """
+        Handle idle timeout, when no incoming requests received in specified time.
+        """
+        if self.request_lock.locked():
+            self.logger.warning(
+                "Idle timeout handler waiting for lock (another request in progress)"
+            )
+        async with self.request_lock:
+            await self.engine_manager.stop_current_engine()
