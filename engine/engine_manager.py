@@ -39,16 +39,6 @@ class EngineManager:
         self._lock = asyncio.Lock()
         self.logger.info("EngineManager initialized")
 
-    @property
-    def current_engine_client(self) -> Optional[EngineClient]:
-        """
-        Get the client for the current engine (if running).
-
-        Returns:
-            Current EngineClient instance or None if no engine is running
-        """
-        return self._current_engine_client
-
     def check_model_configuration(self, model_name: str, required_config: dict) -> bool:
         """
         Check that currently running model is suitable for selected configuration.
@@ -105,7 +95,9 @@ class EngineManager:
         if required_config.get("operation", "unknown") == "context_estimation":
             if self._current_config.get("operation", "unknown") == "context_estimation":
                 # currently loaded model was already configured specifically for context_estimation
-                self.logger.debug("Running engine was already configured for context estimation, reusing")
+                self.logger.debug(
+                    "Running engine was already configured for context estimation, reusing"
+                )
                 return True
             else:
                 # check can we actually use currently loaded model configuration for context estimation
@@ -123,10 +115,14 @@ class EngineManager:
                 if not self.cfg.get_bool(
                     f"models.{model_index}.variants.{variant_index}.tokenize", False
                 ):
-                    self.logger.info("Running engine do not support tokenization queries")
+                    self.logger.info(
+                        "Running engine do not support tokenization queries"
+                    )
                     return False
                 # currently loaded model is suitable
-                self.logger.debug("Currently running engine is suitable for context estimation, reusing")
+                self.logger.debug(
+                    "Currently running engine is suitable for context estimation, reusing"
+                )
                 return True
         elif required_config.get("operation", "unknown") == "text_query":
             # we can use model loaded
@@ -154,7 +150,9 @@ class EngineManager:
                     f"models.{model_index}.variants.{variant_index}.context", 0
                 )
                 if current_context < context_required:
-                    self.logger.info("Currently running engine context size is not sufficient for text query")
+                    self.logger.info(
+                        "Currently running engine context size is not sufficient for text query"
+                    )
                     return False
                 # currently loaded model is suitable
                 return True
@@ -286,16 +284,24 @@ class EngineManager:
                 f"args count={len(args)}"
             )
             # Get timeouts
-            engine_startup_timeout = self.cfg.get_float(f"{variant_key}.engine_startup_timeout")
-            health_check_timeout = self.cfg.get_float(f"{variant_key}.health_check_timeout")
+            engine_startup_timeout = self.cfg.get_float(
+                f"{variant_key}.engine_startup_timeout"
+            )
+            health_check_timeout = self.cfg.get_float(
+                f"{variant_key}.health_check_timeout"
+            )
             # engine_idle_timeout = self.cfg.get_float(f"{variant_key}.engine_idle_timeout")
             # Create and start EngineProcess
-            engine_client = LlamaCppEngine(self.session, connect_url, health_check_timeout)
+            engine_client = LlamaCppEngine(
+                self.session, connect_url, health_check_timeout
+            )
             engine_process = EngineProcess(binary, args)
             await engine_process.start()
             # Wait for engine to become ready
             try:
-                await self._wait_for_engine_ready(engine_client, timeout=engine_startup_timeout)
+                await self._wait_for_engine_ready(
+                    engine_client, timeout=engine_startup_timeout
+                )
             except Exception as e:
                 # If engine fails to become ready, stop the process
                 self.logger.error(f"Engine failed to become ready: {e}")
