@@ -1,4 +1,4 @@
-# __init__.py
+# config/__init__.py
 
 from .config import ConfigLoader
 
