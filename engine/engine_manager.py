@@ -1,8 +1,8 @@
 # engine/engine_manager.py
-
 import aiohttp
 import asyncio
 import python_lua_helper
+import os
 import sys
 from utils.logger import get_logger
 from typing import Optional, Dict, Any
@@ -301,7 +301,8 @@ class EngineManager:
             engine_client = LlamaCppEngine(
                 self.session, connect_url, health_check_timeout
             )
-            engine_process = EngineProcess(binary, args)
+            workdir = os.path.dirname(os.path.abspath(binary))
+            engine_process = EngineProcess(binary, args, workdir)
             await engine_process.start()
             # Wait for engine to become ready
             try:
