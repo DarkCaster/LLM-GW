@@ -11,6 +11,7 @@ from .llamacpp_engine import LlamaCppEngine
 from .engine_process import EngineProcess
 
 
+# NOTE: assumed that EngineManager's instance public methods run one at a time from external flow, so, we do not need to use asyncio.Lock
 class EngineManager:
     """
     Coordinate engine lifecycle - stop old engines, start new ones, track state.
@@ -29,6 +30,7 @@ class EngineManager:
         self.logger = get_logger(self.__class__.__name__)
         self.session = session
         self.cfg = cfg
+        self._is_disposed = False
         # Engine state
         self._current_engine_process: Optional[EngineProcess] = None
         self._current_engine_client: Optional[EngineClient] = None
@@ -177,6 +179,8 @@ class EngineManager:
             ValueError: If model not found, engine type not supported, or config invalid
             TimeoutError: If engine fails to become ready
         """
+        if self._is_disposed:
+            raise RuntimeError("EngineManager is shutdown")
         # Check if current engine configuration is suitable
         if self._check_model_configuration(model_name, required_config):
             # Verify health
@@ -364,5 +368,9 @@ class EngineManager:
         Shutdown the engine manager and stop any running engines.
         """
         self.logger.info("Shutting down EngineManager")
+        if self._is_disposed:
+            self.logger.debug("EngineManager already shutdown")
+            return
+        self._is_disposed = True
         await self.stop_current_engine()
         self.logger.info("EngineManager shutdown complete")
