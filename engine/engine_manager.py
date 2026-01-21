@@ -39,7 +39,9 @@ class EngineManager:
         self._lock = asyncio.Lock()
         self.logger.info("EngineManager initialized")
 
-    def check_model_configuration(self, model_name: str, required_config: dict) -> bool:
+    def _check_model_configuration(
+        self, model_name: str, required_config: dict
+    ) -> bool:
         """
         Check that currently running model is suitable for selected configuration.
 
@@ -178,7 +180,7 @@ class EngineManager:
         """
         async with self._lock:
             # Check if current engine configuration is suitable
-            if self.check_model_configuration(model_name, required_config):
+            if self._check_model_configuration(model_name, required_config):
                 # Verify health
                 if self._current_engine_client is not None:
                     if await self._current_engine_client.check_health():
