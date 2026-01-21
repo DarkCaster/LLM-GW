@@ -7,10 +7,10 @@ import python_lua_helper
 
 # imports from my subpackages
 import config
+import engine
+import models
+import server
 from utils.logger import setup_logging, get_logger
-from engine import EngineManager
-from models import ModelSelector
-from server import RequestHandler, GatewayServer
 
 
 async def async_main(cfg: python_lua_helper.PyLuaHelper):
@@ -25,10 +25,12 @@ async def async_main(cfg: python_lua_helper.PyLuaHelper):
     # Create aiohttp ClientSession for HTTP communication
     async with aiohttp.ClientSession() as session:
         # Initialize components
-        engine_manager = EngineManager(session, cfg)
-        model_selector = ModelSelector(engine_manager, cfg)
-        request_handler = RequestHandler(model_selector, engine_manager, cfg)
-        gateway_server = GatewayServer(request_handler, cfg)
+        engine_manager = engine.EngineManager(session, cfg)
+        model_selector = models.ModelSelector(engine_manager, cfg)
+        request_handler = server.RequestHandler(
+            model_selector, engine_manager, server.IdleWatchdog(), cfg
+        )
+        gateway_server = server.GatewayServer(request_handler, cfg)
 
         try:
             # Run the server (blocks until interrupted)
@@ -39,7 +41,6 @@ async def async_main(cfg: python_lua_helper.PyLuaHelper):
             logger.error(f"Server error: {e}", exc_info=True)
             raise
         finally:
-            # TODO: shutdown idle watchdog
             # Shutdown engine manager
             await engine_manager.shutdown()
 

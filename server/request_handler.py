@@ -245,7 +245,7 @@ class RequestHandler:
                 )
 
             finally:
-                # TODO: rearm idle-watchdog here to self.idle_timeout
+                self.idle_watchdog.rearm(self.idle_timeout, self.handle_idle_timeout)
                 self.logger.debug("Releasing request lock")
 
     async def handle_idle_timeout(self):
