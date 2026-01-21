@@ -9,6 +9,10 @@ server = {
 	engine_idle_timeout = 120.0, -- required param, must be > 0
 }
 
+-- NOTE: there are 2 helper functions available to help with tables and arrays (args)
+-- r = concat_arrays(a1, a2) - will merge 2 arrays-tables together in a new array "r", appending contents of a2 to a1. will omit all non-indexed elements
+-- r = merge_tables(t1, t2) - will merge 2 tables together in a new table "r", elements with same keys from t2 will replace elements from t1, non-indexed elements will be appended
+
 -- model table example, needs to be included to the "models" table at the end
 qwen3_30b_moe = {
 	engine = presets.engines.llamacpp,
