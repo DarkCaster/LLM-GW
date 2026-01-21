@@ -35,6 +35,7 @@ class EngineManager:
         self._current_model_name: Optional[str] = None
         self._current_config: Optional[Dict[str, Any]] = None
         self._current_engine_type: Optional[str] = None
+        self._current_idle_timeout: float = sys.float_info.max
         # Lock to prevent concurrent engine switches
         self._lock = asyncio.Lock()
         self.logger.info("EngineManager initialized")
@@ -163,7 +164,7 @@ class EngineManager:
 
     async def ensure_engine(
         self, model_name: str, required_config: dict
-    ) -> EngineClient:
+    ) -> tuple[EngineClient, float]:
         """
         Ensure the correct engine is running with the required configuration.
 
@@ -172,7 +173,7 @@ class EngineManager:
             required_config: Configuration dictionary with variant_index
 
         Returns:
-            EngineClient instance for the running engine
+            EngineClient instance for the running engine with proposed idle timeout
 
         Raises:
             ValueError: If model not found, engine type not supported, or config invalid
@@ -187,7 +188,7 @@ class EngineManager:
                         self.logger.debug(
                             f"Current engine for model '{model_name}' is already running and healthy"
                         )
-                        return self._current_engine_client
+                        return self._current_engine_client, self._current_idle_timeout
                     else:
                         self.logger.info(
                             f"Current engine for model '{model_name}' failed health check"
@@ -225,7 +226,7 @@ class EngineManager:
             self.logger.info(f"Starting new engine for model '{model_name}'")
             await self._stop_current_engine()
             await self._start_new_engine(model_name, required_config, cfg_engine_type)
-            return self._current_engine_client
+            return self._current_engine_client, self._current_idle_timeout
 
     async def _stop_current_engine(self) -> None:
         """
@@ -247,6 +248,7 @@ class EngineManager:
         self._current_model_name = None
         self._current_config = None
         self._current_engine_type = None
+        self._current_idle_timeout = sys.float_info.max
         self.logger.info("Current engine stopped and state cleared")
 
     async def _start_new_engine(
@@ -265,6 +267,7 @@ class EngineManager:
             TimeoutError: If engine fails to become ready
         """
         # NOTE: engine specifig startup here:
+        engine_idle_timeout = sys.float_info.max
         if engine_type == "llama.cpp":
             # Find model in configuration
             model_index = self._get_model_index(model_name, True)
@@ -292,7 +295,9 @@ class EngineManager:
             health_check_timeout = self.cfg.get_float(
                 f"{variant_key}.health_check_timeout"
             )
-            # engine_idle_timeout = self.cfg.get_float(f"{variant_key}.engine_idle_timeout")
+            engine_idle_timeout = self.cfg.get_float(
+                f"{variant_key}.engine_idle_timeout"
+            )
             # Create and start EngineProcess
             engine_client = LlamaCppEngine(
                 self.session, connect_url, health_check_timeout
@@ -317,6 +322,7 @@ class EngineManager:
         self._current_model_name = model_name
         self._current_config = required_config
         self._current_engine_type = engine_type
+        self._current_idle_timeout = engine_idle_timeout
         self.logger.info(
             f"Engine started successfully for model '{model_name}', (PID: {engine_process.get_pid})"
         )

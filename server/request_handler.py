@@ -1,6 +1,7 @@
 # server/request_handler.py
 
 import asyncio
+import sys
 import aiohttp.web
 import python_lua_helper
 from utils.logger import get_logger
@@ -26,6 +27,7 @@ class RequestHandler:
         """
         self.model_selector = model_selector
         self.cfg = cfg
+        self.idle_timeout = sys.float_info.max
         self.request_lock = asyncio.Lock()
         self.logger = get_logger(self.__class__.__name__)
         self.logger.info("RequestHandler initialized")
@@ -124,7 +126,10 @@ class RequestHandler:
                 self.logger.debug(f"Request path: {path}")
                 # Select appropriate variant
                 try:
-                    engine_client = await self.model_selector.select_variant(
+                    (
+                        engine_client,
+                        self.idle_timeout,
+                    ) = await self.model_selector.select_variant(
                         model_name, request_data
                     )
                 except ValueError as e:
@@ -221,5 +226,5 @@ class RequestHandler:
                 )
 
             finally:
-                # TODO: reset idle-watchdog here
+                # TODO: reset idle-watchdog here to self.idle_timeout
                 self.logger.debug("Releasing request lock")

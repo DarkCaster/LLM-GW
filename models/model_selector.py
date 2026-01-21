@@ -27,7 +27,9 @@ class ModelSelector:
         self.logger.info("ModelSelector initialized")
 
     # TODO: different operations support depending on request_data (for now its always text query for generating chat completions)
-    async def select_variant(self, model_name: str, request_data: dict) -> EngineClient:
+    async def select_variant(
+        self, model_name: str, request_data: dict
+    ) -> tuple[EngineClient, float]:
         """
         Select appropriate model variant based on context requirements.
 
@@ -36,7 +38,7 @@ class ModelSelector:
             request_data: Dictionary containing the request data from await request.json()
 
         Returns:
-            EngineClient instance for the selected variant
+            EngineClient instance for the selected variant with proposed idle timeout
 
         Raises:
             ValueError: If model not found, engine type not supported, or variant selection fails
@@ -51,7 +53,7 @@ class ModelSelector:
 
         # Get engine client for context size estimation
         self.logger.info("Getting engine client for context estimation")
-        estimation_client = await self.engine_manager.ensure_engine(
+        estimation_client, _ = await self.engine_manager.ensure_engine(
             model_name, estimation_config
         )
 
@@ -68,7 +70,7 @@ class ModelSelector:
 
         # Get engine client for final operation
         self.logger.info("Getting engine client for text query")
-        final_client = await self.engine_manager.ensure_engine(
+        final_client, idle_timeout = await self.engine_manager.ensure_engine(
             model_name, text_query_config
         )
 
@@ -79,7 +81,7 @@ class ModelSelector:
         self.logger.debug(
             f"Successfully selected and loaded variant {variant_index} for model '{model_name}'"
         )
-        return final_client
+        return final_client, idle_timeout
 
     def list_models(self) -> List[str]:
         """
