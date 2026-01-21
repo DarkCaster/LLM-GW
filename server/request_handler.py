@@ -5,6 +5,7 @@ import sys
 import aiohttp.web
 import python_lua_helper
 
+from .idle_watchdog import IdleWatchdog
 from engine import EngineManager
 from models import ModelSelector
 from utils.logger import get_logger
@@ -19,6 +20,7 @@ class RequestHandler:
         self,
         model_selector: ModelSelector,
         engine_manager: EngineManager,
+        idle_watchdog: IdleWatchdog,
         cfg: python_lua_helper.PyLuaHelper,
     ):
         """
@@ -30,9 +32,11 @@ class RequestHandler:
         """
         self.model_selector = model_selector
         self.engine_manager = engine_manager
+        self.idle_watchdog = idle_watchdog
         self.cfg = cfg
         self.idle_timeout = sys.float_info.max
-        self.request_lock = asyncio.Lock()
+        self._is_disposed = False
+        self._request_lock = asyncio.Lock()
         self.logger = get_logger(self.__class__.__name__)
         self.logger.info("RequestHandler initialized")
 
@@ -89,13 +93,23 @@ class RequestHandler:
         Returns:
             Response from the engine or error response
         """
-        if self.request_lock.locked():
+        if self._request_lock.locked():
             self.logger.warning(
                 "Request waiting for lock (another request in progress)"
             )
-        async with self.request_lock:
+        async with self._request_lock:
             self.logger.debug("Acquired request lock, processing request")
-            # TODO: disarm idle watchdog
+            if self._is_disposed:
+                return aiohttp.web.json_response(
+                    {
+                        "error": {
+                            "message": "RequestHandler is shuting down",
+                            "type": "internal_error",
+                        }
+                    },
+                    status=500,
+                )
+            self.idle_watchdog.disarm()
             try:
                 # Parse JSON body
                 try:
@@ -238,9 +252,25 @@ class RequestHandler:
         """
         Handle idle timeout, when no incoming requests received in specified time.
         """
-        if self.request_lock.locked():
+        if self._request_lock.locked():
             self.logger.warning(
                 "Idle timeout handler waiting for lock (another request in progress)"
             )
-        async with self.request_lock:
+        async with self._request_lock:
+            if self._is_disposed:
+                return
             await self.engine_manager.stop_current_engine()
+
+    async def shutdown(self) -> None:
+        """
+        Shutdown, deinitialize stuff
+        """
+        if self._request_lock.locked():
+            self.logger.warning(
+                "Idle timeout handler waiting for lock (another request in progress)"
+            )
+        async with self._request_lock:
+            if self._is_disposed:
+                return
+            self._is_disposed = True
+            self.idle_watchdog.disarm()
