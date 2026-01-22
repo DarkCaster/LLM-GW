@@ -27,7 +27,7 @@ example_model = {
 		binary = "/path/to/the/llama-tokenize/binary"
 		-- base_args = { "--log-disable", "--stdin", "--ids" }, -- optional, only enable to override internal args
 		extra_args = { "-m", "/path/to/model.gguf/file" }, -- extra arguments needed for llama-tokenize to work, use to pass model name
-		extra_tokens_per_message = 10, -- add extra 10 tokens per each message to compensate chat-template absense
+		extra_tokens_per_message = 8, -- add extra 10 tokens per each message to compensate chat-template absense
 	}
 	variants = {
 		{
