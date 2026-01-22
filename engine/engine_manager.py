@@ -4,10 +4,13 @@ import asyncio
 import python_lua_helper
 import os
 import sys
+
 from utils.logger import get_logger
 from typing import Optional, Dict, Any
 from .engine_client import EngineClient
 from .llamacpp_engine import LlamaCppEngine
+from .standalone_tokenizer import StandaloneTokenizer
+from .llamacpp_standalone_tokenizer import LlamaStandaloneTokenizer
 from .engine_process import EngineProcess
 
 
@@ -153,6 +156,33 @@ class EngineManager:
                 return True
         # For any other case - currently loaded model is not suitable
         return False
+
+    async def ensure_local_tokenizer(
+        self, model_name: str
+    ) -> StandaloneTokenizer | None:
+        if self._is_disposed:
+            raise RuntimeError("EngineManager is shutdown")
+        # if we already running engine for the same model, local tokenizer is not needed
+        if self._current_model_name == model_name:
+            return None
+        # if we running other model, we need to stop engine
+        if self._current_model_name is not None:
+            await self.stop_current_engine()
+        # Find model in configuration
+        model_index = self._get_model_index(model_name, True)
+        # Get engine type for the model
+        cfg_engine_type = self.cfg.get(f"models.{model_index}.engine")
+        # NOTE: engine specifig setup here:
+        if cfg_engine_type == "llama.cpp":
+            return LlamaStandaloneTokenizer(
+                self.cfg.get_int(
+                    f"models.{model_index}.tokenization.extra_tokens_per_message"
+                ),
+                self.cfg.get(f"models.{model_index}.tokenization.binary"),
+                self.cfg.get(f"models.{model_index}.tokenization.final_args"),
+            )
+        else:
+            raise ValueError(f"Engine type '{cfg_engine_type}' not supported.")
 
     async def ensure_engine(
         self, model_name: str, required_config: dict
