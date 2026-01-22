@@ -45,10 +45,25 @@ class ModelSelector:
         """
         self.logger.debug(f"Selecting suitable configuration for model '{model_name}'")
 
+        # Try getting standalone tokenizer if no same model already running
+        self.logger.info("Getting standalone tokenizer")
+        standalone_tokenizer = await self.engine_manager.ensure_local_tokenizer(
+            model_name
+        )
+        context_size_required = 0
+        if standalone_tokenizer is not None:
+            self.logger.debug("Estimating token requirements with standalone tokenizer")
+            context_size_required = await standalone_tokenizer.estimate_tokens(
+                request_data
+            )
+            self.logger.info(
+                f"Context size required (standalone tokenizer): {context_size_required} tokens"
+            )
+
         # Construct required_config for context estimation
         estimation_config = {
             "operation": "context_estimation",
-            "context_size_required": 0,
+            "context_size_required": context_size_required,
         }
 
         # Get engine client for context size estimation
