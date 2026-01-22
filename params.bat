@@ -1,3 +1,6 @@
+REM add local uv.exe path to the end, will prefer system uv.exe if present
+set "PATH=%PATH%;%script_dir%uv"
+
 REM UV settings
 set "UV_CONCURRENT_DOWNLOADS=4"
 set "UV_CONCURRENT_INSTALLS=2"
