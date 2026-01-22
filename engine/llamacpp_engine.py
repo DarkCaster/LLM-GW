@@ -94,10 +94,10 @@ class LlamaCppEngine(EngineClient):
             self.logger.error("No tokens field (or not a list) in /tokenize response")
             return max_tokens + 32
         # Calculate total context size needed
-        tokens_count = len(tokens)
-        total_tokens = tokens_count + max_tokens + 32
+        token_count = len(tokens)
+        total_tokens = token_count + max_tokens + 32
         self.logger.debug(
-            f"Token estimation: prompt={tokens_count}, max_tokens={max_tokens}, total={total_tokens}"
+            f"Token estimation: prompt={token_count}, max_tokens={max_tokens}, total={total_tokens}"
         )
         return total_tokens
 
