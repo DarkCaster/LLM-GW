@@ -14,34 +14,32 @@ server = {
 -- r = merge_tables(t1, t2) - will merge 2 tables together in a new table "r", elements with same keys from t2 will replace elements from t1, non-indexed elements will be appended
 
 -- model table example, needs to be included to the "models" table at the end
-qwen3_30b_moe = {
+example_model = {
 	engine = presets.engines.llamacpp,
-	name = "qwen3-30b-moe",
-	health_check_timeout = 5.00, -- optional param, if missing, add parameter to table, set it equal to server.health_check_timeout, must be > 0
-	engine_startup_timeout = 60.0, -- optional param, if missing, add parameter to table, set it equal to server.engine_startup_timeout, must be > 0
-	engine_idle_timeout = 120.0, -- optional param, if missing, add parameter to table, set it equal to server.engine_startup_timeout, must be > 0
+	name = "example-model",
+	connect = "http://127.0.0.1:8080", -- base url to forward queries incoming to server when using this model
+	-- health_check_timeout = 5.00, -- optional param, if missing, it will use server.health_check_timeout, must be > 0
+	-- engine_startup_timeout = 60.0, -- optional param, if missing, it will use server.engine_startup_timeout, must be > 0
+	-- engine_idle_timeout = 120.0, -- optional param, if missing, it will use server.engine_startup_timeout, must be > 0
 	variants = {
 		{
 			binary = "/path/to/the/llama-server/binary", -- llama-server binary to launch, mandatory
-			connect = "http://127.0.0.1:8080", -- base url to route incoming query from listen_v4/v6
+			-- connect = "http://127.0.0.1:8080", -- optional, if missing will use value from <this model>
 			args = {"-np","1","-ngl","999","-cmoe","-c","32000","-ctk","q8_0","-ctv","q8_0","-ub","4096","-b","4096","--mmap","-m", "/path/to/model.gguf/file"},
-			tokenize = true, -- allow use this variant for tokenization if loaded, else it will stop/unload this variant and load variant where tokenize it true
 			context = 32000, -- context size provided by this variant, used to choose what variant to load to process incoming query
-			engine_startup_timeout = 60.0, -- optional param, if missing, add parameter to table, set it equal to <this model>.engine_startup_timeout
-			health_check_timeout = 5.00, -- optional param, if missing, add parameter to table, set it equal to <this model>.health_check_timeout, must be > 0
-			engine_idle_timeout = 120.0, -- optional param, if missing, add parameter to table, set it equal to <this model>.engine_startup_timeout, must be > 0
+			-- tokenize = true, -- optional param, true by default, set to false to explicitly deny to use this variant for context estimation query via tokenization
+			-- engine_startup_timeout = 60.0, -- optional param, if missing, it will use <this model>.engine_startup_timeout
+			-- health_check_timeout = 5.00, -- optional param, if missing, it will use <this model>.health_check_timeout, must be > 0
+			-- engine_idle_timeout = 120.0, -- optional param, if missing, it will use <this model>.engine_startup_timeout, must be > 0
 		},
 		{
 			binary = "/path/to/the/llama-server/binary", -- llama-server binary to launch, mandatory
 			connect = "http://127.0.0.1:8080", -- base url to route incoming query from listen_v4/v6
 			args = {"-np","1","-ngl","999","-cmoe","-c","64000","-ctk","q8_0","-ctv","q8_0","-ub","2048","-b","4096","--mmap","-m", "/path/to/model.gguf/file"},
-			tokenize = true, -- allow use this variant for tokenization if loaded, else it will stop/unload this variant and load variant where tokenize it true
 			context = 64000, -- context size provided by this variant, used to choose what variant to load to process incoming query
-			engine_startup_timeout = 60.0, -- optional param, if missing, add parameter to table, set it equal to <this model>.engine_startup_timeout
-			health_check_timeout = 5.00, -- optional param, if missing, add parameter to table, set it equal to <this model>.health_check_timeout, must be > 0
-			engine_idle_timeout = 120.0, -- optional param, if missing, add parameter to table, set it equal to <this model>.engine_startup_timeout, must be > 0
 		},
 	},
 }
 
-models = { qwen3_30b_moe }
+-- You must compose all your models here in this table
+models = { example_model, --[[ example_model2, example_mode3, etc... ]] }

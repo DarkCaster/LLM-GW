@@ -34,14 +34,17 @@ local function check_llamacpp_variant(variant, model_name, variant_index, model)
 	-- Check binary (mandatory)
 	assert_exists(variant.binary, base_path .. ".binary")
 	assert_type(variant.binary, "string", base_path .. ".binary")
-	-- Check connect (mandatory)
+	-- Check connect string, add it from parent model table if missing
+	variant.connect = variant.connect or model.connect
 	assert_exists(variant.connect, base_path .. ".connect")
 	assert_type(variant.connect, "string", base_path .. ".connect")
 	-- Check args (mandatory)
 	assert_exists(variant.args, base_path .. ".args")
 	assert_type(variant.args, "table", base_path .. ".args")
-	-- Check tokenize (mandatory)
-	assert_exists(variant.tokenize, base_path .. ".tokenize")
+	-- Check tokenize parameter (optional, true by default)
+	if variant.tokenize == nil then
+		variant.tokenize = true
+	end
 	assert_type(variant.tokenize, "boolean", base_path .. ".tokenize")
 	-- Check context (mandatory)
 	assert_exists(variant.context, base_path .. ".context")
