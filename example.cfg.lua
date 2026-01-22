@@ -27,7 +27,6 @@ example_model = {
 			-- connect = "http://127.0.0.1:8080", -- optional, if missing will use value from <this model>
 			args = {"-np","1","-ngl","999","-cmoe","-c","32000","-ctk","q8_0","-ctv","q8_0","-ub","4096","-b","4096","--mmap","-m", "/path/to/model.gguf/file"},
 			context = 32000, -- context size provided by this variant, used to choose what variant to load to process incoming query
-			-- tokenize = true, -- optional param, true by default, set to false to explicitly deny to use this variant for context estimation query via tokenization
 			-- engine_startup_timeout = 60.0, -- optional param, if missing, it will use <this model>.engine_startup_timeout
 			-- health_check_timeout = 5.00, -- optional param, if missing, it will use <this model>.health_check_timeout, must be > 0
 			-- engine_idle_timeout = 120.0, -- optional param, if missing, it will use <this model>.engine_startup_timeout, must be > 0

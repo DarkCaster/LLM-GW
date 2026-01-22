@@ -114,14 +114,6 @@ class EngineManager:
                 if model_index < 0:
                     self.logger.error("Internal error (1)!")
                     return False
-                # get `tokenize` value from config for model with known index and variant index, return false if tokenize is false
-                if not self.cfg.get_bool(
-                    f"models.{model_index}.variants.{variant_index}.tokenize", False
-                ):
-                    self.logger.info(
-                        "Running engine do not support tokenization queries"
-                    )
-                    return False
                 # currently loaded model is suitable
                 self.logger.debug(
                     "Currently running engine is suitable for context estimation, reusing"
@@ -204,13 +196,6 @@ class EngineManager:
             context_required = required_config.get("context_size_required", sys.maxsize)
             variant_index = None
             for i in self.cfg.get_table_seq(f"models.{model_index}.variants"):
-                if required_config.get(
-                    "operation", "unknown"
-                ) == "context_estimation" and not self.cfg.get_bool(
-                    f"models.{model_index}.variants.{i}.tokenize", True
-                ):
-                    self.logger.info(f"Variant {i} has tokenization disabled")
-                    continue
                 variant_context = self.cfg.get_int(
                     f"models.{model_index}.variants.{i}.context", 0
                 )

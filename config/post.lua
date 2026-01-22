@@ -41,11 +41,6 @@ local function check_llamacpp_variant(variant, model_name, variant_index, model)
 	-- Check args (mandatory)
 	assert_exists(variant.args, base_path .. ".args")
 	assert_type(variant.args, "table", base_path .. ".args")
-	-- Check tokenize parameter (optional, true by default)
-	if variant.tokenize == nil then
-		variant.tokenize = true
-	end
-	assert_type(variant.tokenize, "boolean", base_path .. ".tokenize")
 	-- Check context (mandatory)
 	assert_exists(variant.context, base_path .. ".context")
 	assert_type(variant.context, "number", base_path .. ".context")
