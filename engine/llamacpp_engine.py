@@ -23,7 +23,7 @@ class LlamaCppEngine(EngineClient):
         self.health_check_timeout = health_check_timeout
         self.session = session
         self.base_url = base_url.rstrip("/")
-        self.logger.info(f"Initialized LlamaCppEngine with base_url: {self.base_url}")
+        self.logger.debug(f"Initialized LlamaCppEngine with base_url: {self.base_url}")
 
     async def estimate_tokens(self, request_data: dict) -> int:
         """

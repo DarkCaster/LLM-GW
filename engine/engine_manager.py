@@ -283,7 +283,7 @@ class EngineManager:
             if not connect_url:
                 raise ValueError(f"Connect URL not found for variant {variant_index}")
             args = self.cfg.get_list(f"{variant_key}.args")
-            self.logger.info(
+            self.logger.debug(
                 f"Starting engine: binary={binary}, connect={connect_url}, "
                 f"args count={len(args)}"
             )
