@@ -204,6 +204,13 @@ class EngineManager:
             context_required = required_config.get("context_size_required", sys.maxsize)
             variant_index = None
             for i in self.cfg.get_table_seq(f"models.{model_index}.variants"):
+                if required_config.get(
+                    "operation", "unknown"
+                ) == "context_estimation" and not self.cfg.get_bool(
+                    f"models.{model_index}.variants.{i}.tokenize", True
+                ):
+                    self.logger.info(f"Variant {i} has tokenization disabled")
+                    continue
                 variant_context = self.cfg.get_int(
                     f"models.{model_index}.variants.{i}.context", 0
                 )
