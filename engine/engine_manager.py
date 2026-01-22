@@ -179,7 +179,7 @@ class EngineManager:
                     f"models.{model_index}.tokenization.extra_tokens_per_message"
                 ),
                 self.cfg.get(f"models.{model_index}.tokenization.binary"),
-                self.cfg.get(f"models.{model_index}.tokenization.final_args"),
+                self.cfg.get_list(f"models.{model_index}.tokenization.final_args"),
             )
         else:
             raise ValueError(f"Engine type '{cfg_engine_type}' not supported.")
