@@ -102,8 +102,8 @@ qwen3_30b_instruct_model = {
 	connect = llama_url,
 	tokenization = { binary = llama_b7735_tokenize_bin, extra_args = { "-m", qwen3_30b_instruct_gguf }, extra_tokens_per_message = 8 },
 	variants = {
-		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_instruct_gguf,10000,2048,2048), context = 10000 },
-		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_instruct_gguf,20000,2048,2048), context = 20000 },
+		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_instruct_gguf,10000,4096,4096), context = 10000 },
+		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_instruct_gguf,20000,4096,4096), context = 20000 },
 		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_instruct_gguf,30000,2048,2048), context = 30000 },
 		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_instruct_gguf,40960,2048,2048), context = 40960 },
 		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_instruct_gguf,81920,1024,2048,"q8_0","q8_0"), context = 81920 },
