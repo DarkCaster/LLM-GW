@@ -71,6 +71,8 @@ local function check_llamacpp_tokenization(tokenization, model_name)
 	-- Check extra_tokens_per_message (required)
 	assert_exists(tokenization.extra_tokens_per_message, base_path .. ".extra_tokens_per_message")
 	assert_type(tokenization.extra_tokens_per_message, "number", base_path .. ".extra_tokens_per_message")
+	-- Combine args together to final_args array
+	tokenization.final_args = concat_arrays(tokenization.base_args, tokenization.extra_args)
 end
 
 -- Check model configuration based on engine type
