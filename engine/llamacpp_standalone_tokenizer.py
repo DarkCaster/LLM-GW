@@ -45,14 +45,14 @@ class LlamaStandaloneTokenizer(StandaloneTokenizer):
                         combined_string += item.get("text", "") + "\n"
 
         # Debug: write combined_string to file for inspection
-        try:
-            with open("LlamaStandaloneTokenizer.dump.txt", "w", encoding="utf-8") as f:
-                f.write(combined_string)
-            self.logger.debug(
-                f"Wrote combined_string ({len(combined_string)} chars) to LlamaStandaloneTokenizer.dump.txt"
-            )
-        except Exception as e:
-            self.logger.warning(f"Failed to write debug dump file: {e}")
+        # try:
+        #     with open("LlamaStandaloneTokenizer.dump.txt", "w", encoding="utf-8") as f:
+        #         f.write(combined_string)
+        #     self.logger.debug(
+        #         f"Wrote combined_string ({len(combined_string)} chars) to LlamaStandaloneTokenizer.dump.txt"
+        #     )
+        # except Exception as e:
+        #    self.logger.warning(f"Failed to write debug dump file: {e}")
 
         # Get workdir from binary base path
         workdir = os.path.dirname(os.path.abspath(self._binary_path))
