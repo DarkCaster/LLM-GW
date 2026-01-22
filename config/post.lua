@@ -54,6 +54,25 @@ local function check_llamacpp_variant(variant, model_name, variant_index, model)
 	assert_positive_number(variant.engine_idle_timeout, base_path .. ".engine_idle_timeout")
 end
 
+-- Check llama.cpp tokenization param
+local function check_llamacpp_tokenization(tokenization, model_name)
+	local base_path = string.format("models.%s.tokenization", model_name)
+	-- Check binary (mandatory)
+	assert_exists(tokenization.binary, base_path .. ".binary")
+	assert_type(tokenization.binary, "string", base_path .. ".binary")
+	-- Check base_args (optional)
+	if tokenization.base_args == nil then
+		tokenization.base_args = {"--log-disable", "--stdin", "--ids"}
+	end
+	assert_type(tokenization.base_args, "table", base_path .. ".base_args")
+	-- Check extra_args (required)
+	assert_exists(tokenization.extra_args, base_path .. ".extra_args")
+	assert_type(tokenization.extra_args, "table", base_path .. ".extra_args")
+	-- Check extra_tokens_per_message (required)
+	assert_exists(tokenization.extra_tokens_per_message, base_path .. ".extra_tokens_per_message")
+	assert_type(tokenization.extra_tokens_per_message, "number", base_path .. ".extra_tokens_per_message")
+end
+
 -- Check model configuration based on engine type
 local function check_model(model, model_name)
 	local base_path = string.format("models.%s", model_name)
@@ -68,6 +87,10 @@ local function check_model(model, model_name)
 	assert_positive_number(model.health_check_timeout, base_path .. ".health_check_timeout")
 	assert_positive_number(model.engine_startup_timeout, base_path .. ".engine_startup_timeout")
 	assert_positive_number(model.engine_idle_timeout, base_path .. ".engine_idle_timeout")
+	-- Validate tokenization table parameters
+	assert_exists(model.tokenization, base_path .. ".tokenization")
+	assert_type(model.tokenization, "table", base_path .. ".tokenization")
+	check_llamacpp_tokenization(model.tokenization, model_name)
 	-- Check variants (mandatory)
 	assert_exists(model.variants, base_path .. ".variants")
 	assert_type(model.variants, "table", base_path .. ".variants")

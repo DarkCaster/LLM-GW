@@ -21,6 +21,14 @@ example_model = {
 	-- health_check_timeout = 5.00, -- optional param, if missing, it will use server.health_check_timeout, must be > 0
 	-- engine_startup_timeout = 60.0, -- optional param, if missing, it will use server.engine_startup_timeout, must be > 0
 	-- engine_idle_timeout = 120.0, -- optional param, if missing, it will use server.engine_startup_timeout, must be > 0
+	tokenization = { -- manual tokenization
+		-- used for initial context size requirements estimation when llama-server is not running
+		-- this estimation is less presise than tokenize query with the running llama-server because chat-template is not applied to the messages
+		binary = "/path/to/the/llama-tokenize/binary"
+		-- base_args = { "--log-disable", "--stdin", "--ids" }, -- optional, only enable to override internal args
+		extra_args = { "-m", "/path/to/model.gguf/file" }, -- extra arguments needed for llama-tokenize to work, use to pass model name
+		extra_tokens_per_message = 10, -- add extra 10 tokens per each message to compensate chat-template absense
+	}
 	variants = {
 		{
 			binary = "/path/to/the/llama-server/binary", -- llama-server binary to launch, mandatory
