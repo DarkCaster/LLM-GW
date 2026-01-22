@@ -58,6 +58,9 @@ class LlamaStandaloneTokenizer(StandaloneTokenizer):
         workdir = os.path.dirname(os.path.abspath(self._binary_path))
         # Run llama-tokenizer process with provided args, send combined string to process stdin
         try:
+            self.logger.info(
+                f"Running process: {self._binary_path} with args: {self._args}"
+            )
             process = await asyncio.subprocess.create_subprocess_exec(
                 self._binary_path,
                 *self._args,
