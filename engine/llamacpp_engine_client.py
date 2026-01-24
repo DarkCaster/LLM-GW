@@ -138,7 +138,7 @@ class LlamaCppEngineClient(EngineClient):
                 full_url,
                 json=transformed_data,
                 headers={"Content-Type": "application/json"},
-                timeout=aiohttp.ClientTimeout(total=sys.maxint),
+                timeout=aiohttp.ClientTimeout(total=sys.maxsize),
             )
         )
         response = await self._request_task
