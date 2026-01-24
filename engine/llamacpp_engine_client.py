@@ -1,5 +1,6 @@
 # engine/llamacpp_engine.py
 
+import sys
 import aiohttp
 import asyncio
 from .engine_client import EngineClient
@@ -137,6 +138,7 @@ class LlamaCppEngineClient(EngineClient):
                 full_url,
                 json=transformed_data,
                 headers={"Content-Type": "application/json"},
+                timeout=aiohttp.ClientTimeout(total=sys.maxint),
             )
         )
         response = await self._request_task
