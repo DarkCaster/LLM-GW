@@ -78,9 +78,6 @@ class RequestHandler:
                     self._disconnect_event.set()
                     break
                 await asyncio.sleep(self._disconnect_check_interval)
-        # We cannot cancel the task, because engine_client need manual stop at the end
-        # except asyncio.CancelledError:
-        #     pass
         except Exception as e:
             self.logger.error(f"Error in connection monitor: {e}")
         engine_client.terminate_request()
@@ -230,7 +227,7 @@ class RequestHandler:
                     engine_response = await engine_client.forward_request(
                         path, request_data
                     )
-                    self.logger.info("Engine response received")
+                    self.logger.debug("Engine response received")
                 except ValueError as e:
                     return self._return_error("Request forwarding failed", 400, e)
                 except Exception as e:

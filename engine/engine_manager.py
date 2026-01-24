@@ -244,7 +244,7 @@ class EngineManager:
         else:
             raise ValueError(f"Engine type '{cfg_engine_type}' not supported.")
         # Stop and start selected engine
-        self.logger.info(f"Starting new engine for model '{model_name}'")
+        self.logger.debug(f"Starting new engine for model '{model_name}'")
         await self.stop_current_engine()
         await self._start_new_engine(model_name, required_config, cfg_engine_type)
         return self._current_engine_client, self._current_idle_timeout
@@ -367,7 +367,7 @@ class EngineManager:
         """
         start_time = asyncio.get_event_loop().time()
         check_interval = 0.25  # Check every 0.25 seconds
-        self.logger.info(f"Waiting for engine to become ready (timeout: {timeout}s)")
+        self.logger.debug(f"Waiting for engine to become ready (timeout: {timeout}s)")
         while True:
             elapsed = asyncio.get_event_loop().time() - start_time
             if elapsed >= timeout:
