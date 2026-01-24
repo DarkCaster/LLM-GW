@@ -83,8 +83,7 @@ class RequestHandler:
         #     pass
         except Exception as e:
             self.logger.error(f"Error in connection monitor: {e}")
-        # TODO: Trigger engine_client to stop generating, release the link to it
-        # await engine_client.terminate()
+        await engine_client.terminate_request()
 
     def _start_monitoring_task(
         self, request: aiohttp.web.Request, engine_client: EngineClient

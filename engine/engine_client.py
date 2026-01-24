@@ -47,6 +47,13 @@ class EngineClient(ABC):
         pass
 
     @abstractmethod
+    async def terminate_request(self) -> None:
+        """
+        Terminate currently running request
+        """
+        pass
+
+    @abstractmethod
     async def check_health(self) -> bool:
         """
         Check engine health and return True if engine is up and running.
