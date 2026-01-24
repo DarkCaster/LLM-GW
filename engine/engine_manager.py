@@ -8,7 +8,7 @@ import sys
 from utils.logger import get_logger
 from typing import Optional, Dict, Any
 from .engine_client import EngineClient
-from .llamacpp_engine import LlamaCppEngineClient
+from .llamacpp_engine_client import LlamaCppEngineClient
 from .standalone_tokenizer import StandaloneTokenizer
 from .llamacpp_standalone_tokenizer import LlamaStandaloneTokenizer
 from .engine_process import EngineProcess
