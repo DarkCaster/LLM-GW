@@ -46,7 +46,7 @@ class ModelSelector:
         self.logger.debug(f"Selecting suitable configuration for model '{model_name}'")
 
         # Try getting standalone tokenizer if no same model already running
-        self.logger.info("Getting standalone tokenizer")
+        self.logger.debug("Getting standalone tokenizer")
         standalone_tokenizer = await self.engine_manager.ensure_local_tokenizer(
             model_name
         )
@@ -67,7 +67,7 @@ class ModelSelector:
         }
 
         # Get engine client for context size estimation
-        self.logger.info("Getting engine client for context estimation")
+        self.logger.debug("Getting engine client for context estimation")
         estimation_client, _ = await self.engine_manager.ensure_engine(
             model_name, estimation_config
         )
@@ -84,7 +84,7 @@ class ModelSelector:
         }
 
         # Get engine client for final operation
-        self.logger.info("Getting engine client for text query")
+        self.logger.debug("Getting engine client for text query")
         final_client, idle_timeout = await self.engine_manager.ensure_engine(
             model_name, text_query_config
         )
