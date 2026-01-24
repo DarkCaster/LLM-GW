@@ -281,7 +281,12 @@ class RequestHandler:
                         await response.prepare(request)
                         # Stream the response with disconnect detection
                         try:
+                            generation_started = False
                             async for chunk in engine_response.content.iter_any():
+                                # some debugging
+                                if not generation_started:
+                                    generation_started = True
+                                    self.logger.info("Started generating answer")
                                 # Check for client disconnect before writing each chunk
                                 if disconnect_event.is_set():
                                     self.logger.info(
