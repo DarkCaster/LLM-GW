@@ -6,6 +6,7 @@ import aiohttp.web
 import python_lua_helper
 
 from .idle_watchdog import IdleWatchdog
+from engine import EngineClient
 from engine import EngineManager
 from models import ModelSelector
 from utils.logger import get_logger
@@ -30,14 +31,18 @@ class RequestHandler:
             model_selector: ModelSelector instance for selecting model variants
             cfg: PyLuaHelper configuration object
         """
-        self.disconnect_check_interval = 1.0  # constant for now
-        self.model_selector = model_selector
-        self.engine_manager = engine_manager
-        self.idle_watchdog = idle_watchdog
-        self.cfg = cfg
-        self.idle_timeout = sys.float_info.max
+        self._model_selector = model_selector
+        self._engine_manager = engine_manager
+        self._idle_watchdog = idle_watchdog
+        self._cfg = cfg
+        self._idle_timeout = sys.float_info.max
         self._is_disposed = False
         self._request_lock = asyncio.Lock()
+        # disconnection logic
+        self._disconnect_check_interval = 0.250  # constant for now
+        self._monitor_task = None
+        self._disconnect_event = None
+        # logger
         self.logger = get_logger(self.__class__.__name__)
 
     def _is_client_connected(self, request: aiohttp.web.Request) -> bool:
@@ -61,28 +66,75 @@ class RequestHandler:
             self.logger.debug(f"Error checking client connection: {e}")
             return False
 
-    async def _monitor_client_connection(
-        self, request: aiohttp.web.Request, cancel_event: asyncio.Event
+    async def _monitor_task_worker(
+        self, request: aiohttp.web.Request, engine_client: EngineClient
     ) -> None:
-        """
-        Monitor client connection and set cancel_event if disconnect is detected.
-
-        Args:
-            request: aiohttp web request
-            cancel_event: Event to set when disconnect is detected
-        """
+        if not self._disconnect_event:
+            raise RuntimeError("Internal error: self._disconnect_event is not set")
         try:
-            while not cancel_event.is_set():
+            while not self._disconnect_event.is_set():
                 if not self._is_client_connected(request):
                     self.logger.info(f"Client disconnect detected for {request.path}")
-                    cancel_event.set()
+                    self._disconnect_event.set()
                     break
-                await asyncio.sleep(self.disconnect_check_interval)
-        except asyncio.CancelledError:
-            # Monitor task was cancelled, this is normal shutdown
-            pass
+                await asyncio.sleep(self._disconnect_check_interval)
+        # We cannot cancel the task, because engine_client need manual stop at the end
+        # except asyncio.CancelledError:
+        #     pass
         except Exception as e:
             self.logger.error(f"Error in connection monitor: {e}")
+        # TODO: Trigger engine_client to stop generating, release the link to it
+        # await engine_client.terminate()
+
+    def _start_monitoring_task(
+        self, request: aiohttp.web.Request, engine_client: EngineClient
+    ) -> None:
+        # create new monitoring event and task, add extra checks
+        if self._disconnect_event is not None:
+            raise RuntimeError(
+                "Internal error: self._disconnect_event already initialized"
+            )
+        if self._monitor_task is not None:
+            raise RuntimeError("Internal error: self._monitor_task already started")
+        self._disconnect_event = asyncio.Event()
+        self._monitor_task = asyncio.create_task(
+            self._monitor_task_worker(request, engine_client)
+        )
+
+    async def _stop_monitoring_task(self) -> None:
+        # Cancel and cleanup monitor task
+        if self._monitor_task is None:
+            self.logger.debug("Monitoring task was not running!")
+            return
+        if self._disconnect_event is None:
+            raise RuntimeError(
+                "Internal error: self._disconnect_event was not created!"
+            )
+        # Command monitoring to stop, and also terminate processing for engine_client
+        self._disconnect_event.set()
+        try:
+            await self._monitor_task
+        except Exception as e:
+            self.logger.error(f"Error while awaiting monitoring task to stop: {e}")
+        if not self._monitor_task.done():
+            self.logger.error(
+                "Internal error: monitoring task not done yet (should not happen)!"
+            )
+        self._monitor_task = None
+        self._disconnect_event = None
+
+    def _return_error(
+        self, message: str, code: int, e: Exception | None
+    ) -> aiohttp.web.json_response:
+        if e is not None:
+            message = f"{message}: {e}"
+            self.logger.error(message)
+        else:
+            self.logger.warning(message)
+        return aiohttp.web.json_response(
+            {"error": {"message": message, "type": "invalid_request_error"}},
+            status=code,
+        )
 
     async def handle_models_list(
         self, request: aiohttp.web.Request
@@ -100,8 +152,7 @@ class RequestHandler:
 
         try:
             # Get list of models from model selector
-            model_names = self.model_selector.list_models()
-
+            model_names = self._model_selector.list_models()
             # Build OpenAI-compatible response
             models_data = []
             for model_name in model_names:
@@ -113,17 +164,11 @@ class RequestHandler:
                         "owned_by": "system",
                     }
                 )
-
             response_data = {"object": "list", "data": models_data}
-
             self.logger.info(f"Returning {len(models_data)} models")
             return aiohttp.web.json_response(response_data)
-
         except Exception as e:
-            self.logger.error(f"Error handling /v1/models request: {e}")
-            return aiohttp.web.json_response(
-                {"error": {"message": str(e), "type": "internal_error"}}, status=500
-            )
+            return self._return_error("Error handling /v1/models request", 500, e)
 
     async def handle_request(
         self, request: aiohttp.web.Request
@@ -144,54 +189,19 @@ class RequestHandler:
         async with self._request_lock:
             self.logger.debug("Acquired request lock, processing request")
             if self._is_disposed:
-                return aiohttp.web.json_response(
-                    {
-                        "error": {
-                            "message": "RequestHandler is shuting down",
-                            "type": "internal_error",
-                        }
-                    },
-                    status=500,
-                )
-            self.idle_watchdog.disarm()
-            # Create event for client disconnect detection
-            disconnect_event = asyncio.Event()
-            monitor_task = None
+                return self._return_error("RequestHandler is shuting down", 500)
+            self._idle_watchdog.disarm()
             try:
-                # Start monitoring client connection
-                monitor_task = asyncio.create_task(
-                    self._monitor_client_connection(request, disconnect_event)
-                )
                 # Parse JSON body
                 try:
                     request_data = await request.json()
                 except Exception as e:
                     self.logger.error(f"Failed to parse JSON body: {e}")
-                    return aiohttp.web.json_response(
-                        {
-                            "error": {
-                                "message": f"Invalid JSON in request body: {e}",
-                                "type": "invalid_request_error",
-                            }
-                        },
-                        status=400,
-                    )
-                # Check for disconnect before proceeding
-                if disconnect_event.is_set():
-                    self.logger.info("Client disconnected before request processing")
-                    return aiohttp.web.Response(status=499)  # Client Closed Request
+                    return self._return_error("Invalid JSON in request body", 400, e)
                 # Validate required fields
                 if "model" not in request_data:
                     self.logger.error("Missing 'model' field in request")
-                    return aiohttp.web.json_response(
-                        {
-                            "error": {
-                                "message": "Missing required field: 'model'",
-                                "type": "invalid_request_error",
-                            }
-                        },
-                        status=400,
-                    )
+                    return self._return_error("Missing required field: 'model'", 400)
                 # Extract model name
                 model_name = request_data["model"]
                 self.logger.info(f"Handling request for model '{model_name}'")
@@ -202,71 +212,31 @@ class RequestHandler:
                 try:
                     (
                         engine_client,
-                        self.idle_timeout,
-                    ) = await self.model_selector.select_variant(
+                        self._idle_timeout,
+                    ) = await self._model_selector.select_variant(
                         model_name, request_data
                     )
-                    # Check for disconnect after model selection
-                    if disconnect_event.is_set():
-                        self.logger.info("Client disconnected during model selection")
-                        return aiohttp.web.Response(status=499)
                 except ValueError as e:
-                    self.logger.error(f"Model selection failed: {e}")
-                    return aiohttp.web.json_response(
-                        {
-                            "error": {
-                                "message": str(e),
-                                "type": "invalid_request_error",
-                            }
-                        },
-                        status=400,
-                    )
+                    return self._return_error("Model selection failed", 400, e)
                 except Exception as e:
-                    self.logger.error(f"Unexpected error during model selection: {e}")
-                    return aiohttp.web.json_response(
-                        {
-                            "error": {
-                                "message": f"Model selection error: {e}",
-                                "type": "internal_error",
-                            }
-                        },
-                        status=500,
+                    return self._return_error(
+                        "Unexpected error during model selection", 500, e
                     )
+
+                # Start monitoring for client connection, add engine_client
+                self._start_monitoring_task(request, engine_client)
                 # Forward request to engine
                 engine_response = None
                 try:
                     engine_response = await engine_client.forward_request(
                         path, request_data
                     )
-                    # Check for disconnect after getting engine response
-                    if disconnect_event.is_set():
-                        self.logger.info(
-                            "Client disconnected after engine response received"
-                        )
-                        return aiohttp.web.Response(status=499)
+                    self.logger.info("Engine response received")
                 except ValueError as e:
-                    self.logger.error(f"Request forwarding failed: {e}")
-                    return aiohttp.web.json_response(
-                        {
-                            "error": {
-                                "message": str(e),
-                                "type": "invalid_request_error",
-                            }
-                        },
-                        status=400,
-                    )
+                    return self._return_error("Request forwarding failed", 400, e)
                 except Exception as e:
-                    self.logger.error(f"Unexpected error forwarding request: {e}")
-                    return aiohttp.web.json_response(
-                        {
-                            "error": {
-                                "message": f"Engine communication error: {e}",
-                                "type": "internal_error",
-                            }
-                        },
-                        status=502,
-                    )
-                # Return the engine response
+                    return self._return_error("Engine communication error", 502, e)
+                # Process the engine response
                 try:
                     content_type = engine_response.headers.get("Content-Type", "")
                     if "text/event-stream" in content_type or request_data.get(
@@ -281,33 +251,23 @@ class RequestHandler:
                         await response.prepare(request)
                         # Stream the response with disconnect detection
                         try:
-                            generation_started = False
+                            write_ok = True
                             async for chunk in engine_response.content.iter_any():
-                                # some debugging
-                                if not generation_started:
-                                    generation_started = True
-                                    self.logger.info("Started generating answer")
-                                # Check for client disconnect before writing each chunk
-                                if disconnect_event.is_set():
-                                    self.logger.info(
-                                        "Client disconnected during streaming response"
-                                    )
-                                    break
                                 try:
                                     await response.write(chunk)
                                 except (ConnectionResetError, BrokenPipeError) as e:
                                     self.logger.info(
                                         f"Client connection error during streaming: {e}"
                                     )
-                                    disconnect_event.set()
+                                    write_ok = False
                                     break
                                 except Exception as e:
                                     self.logger.error(
                                         f"Error writing chunk to client: {e}"
                                     )
-                                    disconnect_event.set()
+                                    write_ok = False
                                     break
-                            if not disconnect_event.is_set():
+                            if write_ok:
                                 await response.write_eof()
                         except asyncio.CancelledError:
                             self.logger.info(
@@ -318,19 +278,7 @@ class RequestHandler:
                     else:
                         # Non-streaming response
                         self.logger.debug("Returning non-streaming response")
-                        # Check for disconnect before reading response body
-                        if disconnect_event.is_set():
-                            self.logger.info(
-                                "Client disconnected before reading engine response"
-                            )
-                            return aiohttp.web.Response(status=499)
                         body = await engine_response.read()
-                        # Check for disconnect after reading response body
-                        if disconnect_event.is_set():
-                            self.logger.info(
-                                "Client disconnected after reading engine response"
-                            )
-                            return aiohttp.web.Response(status=499)
                         return aiohttp.web.Response(
                             body=body,
                             status=engine_response.status,
@@ -344,27 +292,10 @@ class RequestHandler:
                 # Re-raise to properly propagate cancellation
                 raise
             except Exception as e:
-                self.logger.error(
-                    f"Unexpected error handling request: {e}", exc_info=True
-                )
-                return aiohttp.web.json_response(
-                    {
-                        "error": {
-                            "message": f"Internal server error: {e}",
-                            "type": "internal_error",
-                        }
-                    },
-                    status=500,
-                )
+                return self._return_error("Internal server error", 500, e)
             finally:
-                # Cancel and cleanup monitor task
-                if monitor_task is not None and not monitor_task.done():
-                    monitor_task.cancel()
-                    try:
-                        await monitor_task
-                    except asyncio.CancelledError:
-                        pass
-                self.idle_watchdog.rearm(self.idle_timeout, self.handle_idle_timeout)
+                await self._stop_monitoring_task()
+                self._idle_watchdog.rearm(self._idle_timeout, self.handle_idle_timeout)
                 self.logger.debug("Releasing request lock")
 
     async def handle_idle_timeout(self):
@@ -378,7 +309,7 @@ class RequestHandler:
         async with self._request_lock:
             if self._is_disposed:
                 return
-            await self.engine_manager.stop_current_engine()
+            await self._engine_manager.stop_current_engine()
 
     async def shutdown(self) -> None:
         """
@@ -392,4 +323,4 @@ class RequestHandler:
             if self._is_disposed:
                 return
             self._is_disposed = True
-            self.idle_watchdog.disarm()
+            self._idle_watchdog.disarm()
