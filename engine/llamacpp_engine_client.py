@@ -23,6 +23,7 @@ class LlamaCppEngineClient(EngineClient):
         self._health_check_timeout = health_check_timeout
         self._session = session
         self._base_url = base_url.rstrip("/")
+        self._request_task = None
         self.logger.debug(f"Initialized LlamaCppEngine with base_url: {self._base_url}")
 
     async def estimate_tokens(self, request_data: dict) -> int:
@@ -131,11 +132,14 @@ class LlamaCppEngineClient(EngineClient):
         full_url = f"{self._base_url}{path}"
         self.logger.debug(f"Forwarding request to {full_url}")
         # Make the request - let the response stream through
-        response = await self._session.post(
-            full_url,
-            json=transformed_data,
-            headers={"Content-Type": "application/json"},
+        self._request_task = asyncio.create_task(
+            self._session.post(
+                full_url,
+                json=transformed_data,
+                headers={"Content-Type": "application/json"},
+            )
         )
+        response = await self._request_task
         return response
 
     def _transform_request(self, request_data: dict) -> dict:
@@ -154,11 +158,12 @@ class LlamaCppEngineClient(EngineClient):
         # Stub implementation - will be addressed later
         return request_data
 
-    async def terminate_request(self) -> None:
+    def terminate_request(self) -> None:
         """
         Terminate currently running request
         """
-        await self._session.close()
+        if self._request_task is not None:
+            self._request_task.cancel()
 
     async def check_health(self) -> bool:
         """

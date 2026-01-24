@@ -83,7 +83,7 @@ class RequestHandler:
         #     pass
         except Exception as e:
             self.logger.error(f"Error in connection monitor: {e}")
-        await engine_client.terminate_request()
+        engine_client.terminate_request()
 
     def _start_monitoring_task(
         self, request: aiohttp.web.Request, engine_client: EngineClient

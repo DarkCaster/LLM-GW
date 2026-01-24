@@ -47,7 +47,7 @@ class EngineClient(ABC):
         pass
 
     @abstractmethod
-    async def terminate_request(self) -> None:
+    def terminate_request(self) -> None:
         """
         Terminate currently running request
         """
