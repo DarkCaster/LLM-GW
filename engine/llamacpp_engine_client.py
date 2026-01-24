@@ -20,10 +20,10 @@ class LlamaCppEngineClient(EngineClient):
             base_url: Base URL for the llama.cpp server (e.g., "http://127.0.0.1:8080")
         """
         super().__init__()
-        self.health_check_timeout = health_check_timeout
-        self.session = session
-        self.base_url = base_url.rstrip("/")
-        self.logger.debug(f"Initialized LlamaCppEngine with base_url: {self.base_url}")
+        self._health_check_timeout = health_check_timeout
+        self._session = session
+        self._base_url = base_url.rstrip("/")
+        self.logger.debug(f"Initialized LlamaCppEngine with base_url: {self._base_url}")
 
     async def estimate_tokens(self, request_data: dict) -> int:
         """
@@ -50,9 +50,9 @@ class LlamaCppEngineClient(EngineClient):
             self.logger.error("No messages field in request_data")
             return max_tokens + 32
         # Call /apply-template endpoint
-        apply_template_url = f"{self.base_url}/apply-template"
+        apply_template_url = f"{self._base_url}/apply-template"
         try:
-            async with self.session.post(
+            async with self._session.post(
                 apply_template_url,
                 json={"messages": messages},
                 headers={"Content-Type": "application/json"},
@@ -73,9 +73,9 @@ class LlamaCppEngineClient(EngineClient):
             self.logger.error("No prompt field in /apply-template response")
             return max_tokens + 32
         # Call /tokenize endpoint
-        tokenize_url = f"{self.base_url}/tokenize"
+        tokenize_url = f"{self._base_url}/tokenize"
         try:
-            async with self.session.post(
+            async with self._session.post(
                 tokenize_url,
                 json={"content": prompt},
                 headers={"Content-Type": "application/json"},
@@ -128,10 +128,10 @@ class LlamaCppEngineClient(EngineClient):
         # Transform request data
         transformed_data = self._transform_request(request_data)
         # Forward the request to llama.cpp server
-        full_url = f"{self.base_url}{path}"
+        full_url = f"{self._base_url}{path}"
         self.logger.debug(f"Forwarding request to {full_url}")
         # Make the request - let the response stream through
-        response = await self.session.post(
+        response = await self._session.post(
             full_url,
             json=transformed_data,
             headers={"Content-Type": "application/json"},
@@ -154,6 +154,12 @@ class LlamaCppEngineClient(EngineClient):
         # Stub implementation - will be addressed later
         return request_data
 
+    async def terminate_request(self) -> None:
+        """
+        Terminate currently running request
+        """
+        await self._session.close()
+
     async def check_health(self) -> bool:
         """
         Check llama.cpp engine health using /health endpoint.
@@ -161,30 +167,30 @@ class LlamaCppEngineClient(EngineClient):
         Returns:
             True if engine is healthy, False otherwise
         """
-        health_url = f"{self.base_url}/health"
+        health_url = f"{self._base_url}/health"
         try:
-            async with self.session.get(
+            async with self._session.get(
                 health_url,
-                timeout=aiohttp.ClientTimeout(total=self.health_check_timeout),
+                timeout=aiohttp.ClientTimeout(total=self._health_check_timeout),
             ) as response:
                 if response.status == 200:
-                    self.logger.debug(f"Health check passed for {self.base_url}")
+                    self.logger.debug(f"Health check passed for {self._base_url}")
                     return True
                 else:
                     self.logger.debug(
-                        f"Health check failed with status {response.status} for {self.base_url}"
+                        f"Health check failed with status {response.status} for {self._base_url}"
                     )
                     return False
         except asyncio.TimeoutError:
-            self.logger.warning(f"Health check timeout for {self.base_url}")
+            self.logger.warning(f"Health check timeout for {self._base_url}")
             return False
         except aiohttp.ClientError as e:
             self.logger.warning(
-                f"Health check connection error for {self.base_url}: {e}"
+                f"Health check connection error for {self._base_url}: {e}"
             )
             return False
         except Exception as e:
             self.logger.error(
-                f"Unexpected error during health check for {self.base_url}: {e}"
+                f"Unexpected error during health check for {self._base_url}: {e}"
             )
             return False
