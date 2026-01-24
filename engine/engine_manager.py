@@ -8,7 +8,7 @@ import sys
 from utils.logger import get_logger
 from typing import Optional, Dict, Any
 from .engine_client import EngineClient
-from .llamacpp_engine import LlamaCppEngine
+from .llamacpp_engine import LlamaCppEngineClient
 from .standalone_tokenizer import StandaloneTokenizer
 from .llamacpp_standalone_tokenizer import LlamaStandaloneTokenizer
 from .engine_process import EngineProcess
@@ -320,7 +320,7 @@ class EngineManager:
                 f"{variant_key}.engine_idle_timeout"
             )
             # Create and start EngineProcess
-            engine_client = LlamaCppEngine(
+            engine_client = LlamaCppEngineClient(
                 self.session, connect_url, health_check_timeout
             )
             workdir = os.path.dirname(os.path.abspath(binary))

@@ -5,7 +5,7 @@ import asyncio
 from .engine_client import EngineClient
 
 
-class LlamaCppEngine(EngineClient):
+class LlamaCppEngineClient(EngineClient):
     """
     Concrete implementation of EngineClient for llama.cpp engines.
     """
