@@ -41,8 +41,11 @@ async def async_main(cfg: python_lua_helper.PyLuaHelper):
             logger.error(f"Server error: {e}", exc_info=True)
             raise
         finally:
+            # Stop serving new requests
+            request_handler.stop()
             # Shutdown engine manager
             await engine_manager.shutdown()
+            await request_handler.shutdown()
 
 
 def main():

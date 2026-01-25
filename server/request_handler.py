@@ -37,6 +37,7 @@ class RequestHandler:
         self._cfg = cfg
         self._idle_timeout = sys.float_info.max
         self._is_disposed = False
+        self._is_stopped = False
         self._request_lock = asyncio.Lock()
         # disconnection logic
         self._disconnect_check_interval = 0.250  # constant for now
@@ -144,8 +145,9 @@ class RequestHandler:
         Returns:
             JSON response with list of available models
         """
+        if self._is_stopped or self._is_disposed:
+            return self._return_error("RequestHandler is shuting down", 500)
         self.logger.info("Handling /v1/models request")
-
         try:
             # Get list of models from model selector
             model_names = self._model_selector.list_models()
@@ -178,13 +180,15 @@ class RequestHandler:
         Returns:
             Response from the engine or error response
         """
+        if self._is_stopped or self._is_disposed:
+            return self._return_error("RequestHandler is shuting down", 500)
         if self._request_lock.locked():
             self.logger.warning(
                 "Request waiting for lock (another request in progress)"
             )
         async with self._request_lock:
             self.logger.debug("Acquired request lock, processing request")
-            if self._is_disposed:
+            if self._is_stopped or self._is_disposed:
                 return self._return_error("RequestHandler is shuting down", 500)
             self._idle_watchdog.disarm()
             try:
@@ -298,6 +302,8 @@ class RequestHandler:
         """
         Handle idle timeout, when no incoming requests received in specified time.
         """
+        if self._is_stopped:
+            return
         if self._request_lock.locked():
             self.logger.warning(
                 "Idle timeout handler waiting for lock (another request in progress)"
@@ -318,5 +324,12 @@ class RequestHandler:
         async with self._request_lock:
             if self._is_disposed:
                 return
+            self._is_stopped = True
             self._is_disposed = True
             self._idle_watchdog.disarm()
+
+    def stop(self) -> None:
+        """
+        Stop processing any new requests
+        """
+        self._is_stopped = True
