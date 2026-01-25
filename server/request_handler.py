@@ -182,10 +182,10 @@ class RequestHandler:
         """
         if self._is_stopped or self._is_disposed:
             return self._return_error("RequestHandler is shuting down", 500)
-        if self._request_lock.locked():
-            self.logger.warning(
-                "Request waiting for lock (another request in progress)"
-            )
+        # if self._request_lock.locked():
+        #     self.logger.warning(
+        #         "Request waiting for lock (another request in progress)"
+        #    )
         async with self._request_lock:
             self.logger.debug("Acquired request lock, processing request")
             if self._is_stopped or self._is_disposed:
