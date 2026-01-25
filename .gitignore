@@ -20,6 +20,7 @@ py_dist/
 
 # Subdirs inside tools dir
 /tools/**/
+/tools/*.zip
 
 # Perpetual
 /.perpetual/*
