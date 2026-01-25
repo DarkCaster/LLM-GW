@@ -3,7 +3,7 @@
 import asyncio
 import asyncio.subprocess
 import time
-from utils.logger import get_logger
+import logger
 from typing import List
 
 
@@ -24,7 +24,7 @@ class EngineProcess:
         self.binary_path = binary_path
         self.args = args
         self.work_dir = work_dir
-        self.logger = get_logger(self.__class__.__name__)
+        self.logger = logger.get_logger(self.__class__.__name__)
 
         self._process: asyncio.subprocess.Process | None = None
         self._status = "stopped"

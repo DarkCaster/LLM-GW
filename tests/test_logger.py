@@ -2,7 +2,7 @@ import unittest
 import logging
 import io
 from unittest.mock import patch
-from utils.logger import setup_logging, get_logger
+from logger.logger import setup_logging, get_logger
 
 
 class TestLogger(unittest.TestCase):

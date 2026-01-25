@@ -1,7 +1,7 @@
 # engine/engine_client.py
 
 from abc import ABC, abstractmethod
-from utils.logger import get_logger
+import logger
 import aiohttp
 
 
@@ -12,7 +12,7 @@ class EngineClient(ABC):
 
     def __init__(self):
         """Initialize the engine client."""
-        self.logger = get_logger(self.__class__.__name__)
+        self.logger = logger.get_logger(self.__class__.__name__)
 
     @abstractmethod
     async def estimate_tokens(self, request_data: dict) -> int:

@@ -4,8 +4,7 @@ import asyncio
 import python_lua_helper
 import os
 import sys
-
-from utils.logger import get_logger
+import logger
 from typing import Dict, Any
 from .engine_client import EngineClient
 from .llamacpp_engine_client import LlamaCppEngineClient
@@ -30,7 +29,7 @@ class EngineManager:
             session: aiohttp.ClientSession, session used
             cfg: PyLuaHelper configuration object
         """
-        self.logger = get_logger(self.__class__.__name__)
+        self.logger = logger.get_logger(self.__class__.__name__)
         self.session = session
         self.cfg = cfg
         self._is_disposed = False

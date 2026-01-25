@@ -1,8 +1,8 @@
 # server/idle_watchdog.py
 
 import asyncio
+import logger
 from typing import Callable, Awaitable
-from utils.logger import get_logger
 
 
 class IdleWatchdog:
@@ -12,7 +12,7 @@ class IdleWatchdog:
 
     def __init__(self):
         """Initialize IdleWatchdog."""
-        self.logger = get_logger(self.__class__.__name__)
+        self.logger = logger.get_logger(self.__class__.__name__)
         self._timer_task: asyncio.Task | None = None
         self._timeout: float = 0.0
         self._callback: Callable[[], Awaitable[None]] | None = None

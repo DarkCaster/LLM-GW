@@ -4,12 +4,11 @@ import asyncio
 import sys
 import aiohttp.web
 import python_lua_helper
-
+import logger
 from .idle_watchdog import IdleWatchdog
 from engine import EngineClient
 from engine import EngineManager
 from models import ModelSelector
-from utils.logger import get_logger
 
 
 class RequestHandler:
@@ -44,7 +43,7 @@ class RequestHandler:
         self._monitor_task = None
         self._disconnect_event = None
         # logger
-        self.logger = get_logger(self.__class__.__name__)
+        self.logger = logger.get_logger(self.__class__.__name__)
 
     def _is_client_connected(self, request: aiohttp.web.Request) -> bool:
         """
