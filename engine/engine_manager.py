@@ -97,38 +97,9 @@ class EngineManager:
         if not self._current_config or not required_config:
             self.logger.info("No engine running")
             return False
-        # check cases when we requested config context_estimation
-        if required_config.get("operation", "unknown") == "context_estimation":
-            if self._current_config.get("operation", "unknown") == "context_estimation":
-                # currently loaded model was already configured specifically for context_estimation
-                self.logger.debug(
-                    "Running engine was already configured for context estimation, reusing"
-                )
-                return True
-            else:
-                # check can we actually use currently loaded model configuration for context estimation
-                # get variant index from current configuration (return false if no index)
-                variant_index = self._current_config.get("variant_index")
-                if variant_index is None:
-                    self.logger.error("No variant index detected for running engine")
-                    return False
-                # get model index from cfg for current model name, return false if we cannot detect it
-                model_index = self._get_model_index(self._current_model_name, False)
-                if model_index < 0:
-                    self.logger.error("Internal error (1)!")
-                    return False
-                # currently loaded model is suitable
-                self.logger.debug(
-                    "Currently running engine is suitable for context estimation, reusing"
-                )
-                return True
-        elif required_config.get("operation", "unknown") == "text_query":
-            # we can use model loaded
-            if (
-                self._current_config.get("operation", "unknown") == "text_query"
-                or self._current_config.get("operation", "unknown")
-                == "context_estimation"
-            ):
+        if required_config.get("operation", "unknown") == "text_query":
+            # check if we can use currently loaded model
+            if self._current_config.get("operation", "unknown") == "text_query":
                 # check can we actually use currently loaded model configuration for text query
                 context_required = required_config.get(
                     "context_size_required", sys.maxsize
@@ -141,7 +112,7 @@ class EngineManager:
                 # get model index from cfg for current model name, return false if we cannot detect it
                 model_index = self._get_model_index(self._current_model_name, False)
                 if model_index < 0:
-                    self.logger.error("Internal error (2)!")
+                    self.logger.error("Internal error!")
                     return False
                 # get `context` value from cfg (with fallback 0), compare with context_required return false if context value is smaller
                 current_context = self.cfg.get_int(
@@ -154,6 +125,11 @@ class EngineManager:
                     return False
                 # currently loaded model is suitable
                 return True
+            else:
+                self.logger.info(
+                    "Currently running engine is not suitable for 'text_query' operation"
+                )
+                return False
         # For any other case - currently loaded model is not suitable
         return False
 
@@ -186,7 +162,7 @@ class EngineManager:
 
     async def ensure_engine(
         self, model_name: str, required_config: dict
-    ) -> tuple[EngineClient, float]:
+    ) -> tuple[EngineClient, float, int]:
         """
         Ensure the correct engine is running with the required configuration.
 
@@ -195,7 +171,7 @@ class EngineManager:
             required_config: Configuration dictionary with variant_index
 
         Returns:
-            EngineClient instance for the running engine with proposed idle timeout
+            EngineClient instance for the running engine with proposed idle timeout and loaded variant index if applicable
 
         Raises:
             ValueError: If model not found, engine type not supported, or config invalid
@@ -211,7 +187,11 @@ class EngineManager:
                     self.logger.debug(
                         f"Current engine for model '{model_name}' is already running and healthy"
                     )
-                    return self._current_engine_client, self._current_idle_timeout
+                    return (
+                        self._current_engine_client,
+                        self._current_idle_timeout,
+                        self._current_config.get("variant_index", 0),
+                    )
                 else:
                     self.logger.info(
                         f"Current engine for model '{model_name}' failed health check"
@@ -240,6 +220,7 @@ class EngineManager:
                     f"No suitable variant found for model '{model_name}' "
                     f"with required context size {context_required}"
                 )
+            # write variant index to required_config, it will be set as current config at engine start
             required_config["variant_index"] = variant_index
         else:
             raise ValueError(f"Engine type '{cfg_engine_type}' not supported.")
@@ -247,7 +228,11 @@ class EngineManager:
         self.logger.debug(f"Starting new engine for model '{model_name}'")
         await self.stop_current_engine()
         await self._start_new_engine(model_name, required_config, cfg_engine_type)
-        return self._current_engine_client, self._current_idle_timeout
+        return (
+            self._current_engine_client,
+            self._current_idle_timeout,
+            self._current_config.get("variant_index", 0),
+        )
 
     async def stop_current_engine(self) -> None:
         """

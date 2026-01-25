@@ -26,12 +26,11 @@ class ModelSelector:
         self.logger = get_logger(self.__class__.__name__)
         self.logger.info("ModelSelector initialized")
 
-    # TODO: different operations support depending on request_data (for now its always text query for generating chat completions)
     async def select_variant(
         self, model_name: str, request_data: dict
     ) -> tuple[EngineClient, float]:
         """
-        Select appropriate model variant based on context requirements.
+        Select appropriate model and variant based on model name, request type, context requirements and other properties.
 
         Args:
             model_name: Name of the model to select
@@ -45,8 +44,10 @@ class ModelSelector:
         """
         self.logger.debug(f"Selecting suitable configuration for model '{model_name}'")
 
-        # Try getting standalone tokenizer if no same model already running
-        self.logger.debug("Getting standalone tokenizer")
+        # TODO: add different operations support depending on request_data here.
+        # (for now it is always 'text_query' assuming we are generating chat completions or embeddings)
+
+        # Try getting standalone tokenizer if model with same is not already running
         standalone_tokenizer = await self.engine_manager.ensure_local_tokenizer(
             model_name
         )
@@ -62,37 +63,31 @@ class ModelSelector:
 
         # Construct required_config for context estimation
         estimation_config = {
-            "operation": "context_estimation",
+            "operation": "text_query",
             "context_size_required": context_size_required,
         }
-
         # Get engine client for context size estimation
-        self.logger.debug("Getting engine client for context estimation")
-        estimation_client, _ = await self.engine_manager.ensure_engine(
+        estimation_client, _, _ = await self.engine_manager.ensure_engine(
             model_name, estimation_config
         )
-
         # Estimate tokens
-        self.logger.debug("Estimating token requirements")
         context_size_required = await estimation_client.estimate_tokens(request_data)
         self.logger.info(f"Context size required: {context_size_required} tokens")
 
-        # Construct required_config for final operation
+        # Construct required_config for operation we wanted
         text_query_config = {
             "operation": "text_query",
             "context_size_required": context_size_required,
         }
-
         # Get engine client for final operation
-        self.logger.debug("Getting engine client for text query")
-        final_client, idle_timeout = await self.engine_manager.ensure_engine(
-            model_name, text_query_config
-        )
-
+        (
+            final_client,
+            idle_timeout,
+            variant_index,
+        ) = await self.engine_manager.ensure_engine(model_name, text_query_config)
         if final_client is None:
             raise ValueError(f"Failed to get engine client for model '{model_name}'")
 
-        variant_index = text_query_config.get("variant_index", 0)
         self.logger.debug(
             f"Successfully selected and loaded variant {variant_index} for model '{model_name}'"
         )
