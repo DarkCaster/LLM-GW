@@ -105,7 +105,9 @@ if ($DlCudaLibs) {
 
 Write-Host "Cleaning up..."
 Remove-Item -Path $zipFile -Force
-Remove-Item -Path $cudaLibsZipFile -Force
+if ($DlCudaLibs) {
+    Remove-Item -Path $cudaLibsZipFile -Force
+}
 
 Write-Host "Done"
 Write-Host "Files extracted to: $extractPath"
