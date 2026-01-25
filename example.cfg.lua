@@ -71,7 +71,7 @@ llama_default_args = {
 	"--mmap",
 }
 
--- full path to llama binaries
+-- full path to llama binaries, download from https://github.com/ggml-org/llama.cpp/releases
 llama_b7735_bin = [[C:\llama-b7735-bin-win-cuda-13.1-x64\llama-server.exe]]
 llama_b7735_tokenize_bin = [[C:\llama-b7735-bin-win-cuda-13.1-x64\llama-tokenize.exe]]
 
@@ -93,6 +93,9 @@ function get_llama_moe_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	return concat_arrays(args, {"-m", gguf})
 end
 
+
+-- https://huggingface.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF/tree/main
+-- https://huggingface.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF/tree/main
 qwen3_30b_instruct_gguf = [[C:\Qwen\Qwen3-30B-A3B-Instruct-2507-UD-Q3_K_XL.gguf]]
 qwen3_30b_coder_gguf = [[C:\Qwen\Qwen3-Coder-30B-A3B-Instruct-UD-Q3_K_XL.gguf]]
 
