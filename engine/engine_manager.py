@@ -352,7 +352,7 @@ class EngineManager:
         if self._is_disposed:
             raise RuntimeError("Engine manager is shuting down")
         start_time = asyncio.get_event_loop().time()
-        check_interval = 0.25  # Check every 0.25 seconds
+        check_interval = 0.1
         self.logger.debug(f"Waiting for engine to become ready (timeout: {timeout}s)")
         while True:
             # Return now if we actively waited for healthcheck to complete when shutdown was triggered

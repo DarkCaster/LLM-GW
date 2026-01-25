@@ -40,7 +40,7 @@ class RequestHandler:
         self._is_stopped = False
         self._request_lock = asyncio.Lock()
         # disconnection logic
-        self._disconnect_check_interval = 0.250  # constant for now
+        self._disconnect_check_interval = 1.0
         self._monitor_task = None
         self._disconnect_event = None
         # logger
