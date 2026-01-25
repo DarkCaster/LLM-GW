@@ -18,14 +18,14 @@ function Show-Usage {
     Write-Host "  .\download-llama-cpp.ps1 <build_id> <build_variant> [base_dir] [download_cuda_libs: 0|1]"
     Write-Host ""
     Write-Host "PARAMETERS:"
-    Write-Host "  build_id           - Build number (e.g., 7832)"
+    Write-Host "  build_id           - Build number (e.g., 7833)"
     Write-Host "  build_variant      - Build variant (cuda-13.1-x64, cuda-12.4-x64, cpu-arm64, cpu-x64, hip-radeon-x64)"
     Write-Host "  base_dir           - Optional base directory for extraction (defaults to script directory)"
     Write-Host "  download_cuda_libs - Optional - include cuda libs download if present for selected build variant, 1 or 0, default: 0 (do not download)"
     Write-Host ""
     Write-Host "EXAMPLES:"
-    Write-Host "  .\download-llama-cpp.ps1 7832 cuda-12.4-x64"
-    Write-Host "  .\download-llama-cpp.ps1 7832 cpu-x64 C:\Tools"
+    Write-Host "  .\download-llama-cpp.ps1 7833 cuda-12.4-x64"
+    Write-Host "  .\download-llama-cpp.ps1 7833 cpu-x64 C:\Tools"
     Write-Host ""
 }
 
