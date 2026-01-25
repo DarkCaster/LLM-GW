@@ -121,7 +121,7 @@ class RequestHandler:
         self._disconnect_event = None
 
     def _return_error(
-        self, message: str, code: int, e: Exception | None
+        self, message: str, code: int, e: Exception | None = None
     ) -> aiohttp.web.json_response:
         if e is not None:
             message = f"{message}: {e}"
