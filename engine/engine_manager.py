@@ -350,7 +350,7 @@ class EngineManager:
 
     async def _wait_for_engine_ready(
         self, engine_client: EngineClient, timeout: float
-    ) -> bool:
+    ) -> None:
         """
         Wait for engine to become ready by polling health check.
 
@@ -364,10 +364,15 @@ class EngineManager:
         Raises:
             TimeoutError: If engine doesn't become ready within timeout
         """
+        if self._is_disposed:
+            raise RuntimeError("Engine manager is shuting down")
         start_time = asyncio.get_event_loop().time()
         check_interval = 0.25  # Check every 0.25 seconds
         self.logger.debug(f"Waiting for engine to become ready (timeout: {timeout}s)")
         while True:
+            # Return now if we actively waited for healthcheck to complete when shutdown was triggered
+            if self._is_disposed:
+                raise RuntimeError("Engine manager is shuting down")
             elapsed = asyncio.get_event_loop().time() - start_time
             if elapsed >= timeout:
                 raise TimeoutError(
@@ -377,7 +382,7 @@ class EngineManager:
             try:
                 if await engine_client.check_health():
                     self.logger.info(f"Engine became ready after {elapsed:.3f} seconds")
-                    return True
+                    return
             except Exception as e:
                 self.logger.debug(f"Health check error (will retry): {e}")
             # Log progress
