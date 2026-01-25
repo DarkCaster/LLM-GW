@@ -319,7 +319,7 @@ class RequestHandler:
         """
         if self._request_lock.locked():
             self.logger.warning(
-                "Idle timeout handler waiting for lock (another request in progress)"
+                "shutdown handler waiting for lock (another request in progress)"
             )
         async with self._request_lock:
             if self._is_disposed:
