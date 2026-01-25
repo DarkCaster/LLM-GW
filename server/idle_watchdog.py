@@ -1,7 +1,7 @@
 # server/idle_watchdog.py
 
 import asyncio
-from typing import Optional, Callable, Awaitable
+from typing import Callable, Awaitable
 from utils.logger import get_logger
 
 
@@ -13,9 +13,9 @@ class IdleWatchdog:
     def __init__(self):
         """Initialize IdleWatchdog."""
         self.logger = get_logger(self.__class__.__name__)
-        self._timer_task: Optional[asyncio.Task] = None
+        self._timer_task: asyncio.Task | None = None
         self._timeout: float = 0.0
-        self._callback: Optional[Callable[[], Awaitable[None]]] = None
+        self._callback: Callable[[], Awaitable[None]] | None = None
 
     def disarm(self) -> None:
         """Stop current timer."""

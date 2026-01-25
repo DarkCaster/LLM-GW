@@ -1,14 +1,13 @@
 import logging
 import sys
-from typing import Optional
 
 loggerInitialized = False
 
 
 def setup_logging(
     level: int = logging.INFO,
-    format_string: Optional[str] = None,
-    date_format: Optional[str] = None,
+    format_string: str | None = None,
+    date_format: str | None = None,
 ) -> None:
     """
     Setup the root logger with console handler.

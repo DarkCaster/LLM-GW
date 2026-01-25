@@ -13,7 +13,7 @@ import server
 from utils.logger import setup_logging, get_logger
 
 
-async def async_main(cfg: python_lua_helper.PyLuaHelper):
+async def async_main(cfg: python_lua_helper.PyLuaHelper) -> None:
     """
     Async main function that sets up and runs the server.
 
@@ -54,7 +54,7 @@ async def async_main(cfg: python_lua_helper.PyLuaHelper):
             await gateway_server.stop()
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run LLM-Gateway, manage LLM engines on demand per request"
     )

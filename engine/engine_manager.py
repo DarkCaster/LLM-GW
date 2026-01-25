@@ -6,7 +6,7 @@ import os
 import sys
 
 from utils.logger import get_logger
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from .engine_client import EngineClient
 from .llamacpp_engine_client import LlamaCppEngineClient
 from .standalone_tokenizer import StandaloneTokenizer
@@ -35,11 +35,11 @@ class EngineManager:
         self.cfg = cfg
         self._is_disposed = False
         # Engine state
-        self._current_engine_process: Optional[EngineProcess] = None
-        self._current_engine_client: Optional[EngineClient] = None
-        self._current_model_name: Optional[str] = None
-        self._current_config: Optional[Dict[str, Any]] = None
-        self._current_engine_type: Optional[str] = None
+        self._current_engine_process: EngineProcess | None = None
+        self._current_engine_client: EngineClient | None = None
+        self._current_model_name: str | None = None
+        self._current_config: Dict[str, Any] | None = None
+        self._current_engine_type: str | None = None
         self._current_idle_timeout: float = sys.float_info.max
         self.logger.info("EngineManager initialized")
 

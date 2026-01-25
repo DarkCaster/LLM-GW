@@ -4,7 +4,7 @@ import asyncio
 import asyncio.subprocess
 import time
 from utils.logger import get_logger
-from typing import List, Optional
+from typing import List
 
 
 class EngineProcess:
@@ -12,9 +12,7 @@ class EngineProcess:
     Wrapper for managing a single LLM engine subprocess.
     """
 
-    def __init__(
-        self, binary_path: str, args: List[str], work_dir: Optional[str] = None
-    ):
+    def __init__(self, binary_path: str, args: List[str], work_dir: str | None = None):
         """
         Initialize EngineProcess.
 
@@ -28,11 +26,11 @@ class EngineProcess:
         self.work_dir = work_dir
         self.logger = get_logger(self.__class__.__name__)
 
-        self._process: Optional[asyncio.subprocess.Process] = None
+        self._process: asyncio.subprocess.Process | None = None
         self._status = "stopped"
-        self._start_time: Optional[float] = None
-        self._stdout_task: Optional[asyncio.Task] = None
-        self._stderr_task: Optional[asyncio.Task] = None
+        self._start_time: float | None = None
+        self._stdout_task: asyncio.Task | None = None
+        self._stderr_task: asyncio.Task | None = None
 
     async def start(self) -> None:
         """
@@ -154,7 +152,7 @@ class EngineProcess:
         return True
 
     @property
-    def get_pid(self) -> Optional[int]:
+    def get_pid(self) -> int | None:
         """
         Get process PID if running.
 

@@ -298,7 +298,7 @@ class RequestHandler:
                 self._idle_watchdog.rearm(self._idle_timeout, self.handle_idle_timeout)
                 self.logger.debug("Releasing request lock")
 
-    async def handle_idle_timeout(self):
+    async def handle_idle_timeout(self) -> None:
         """
         Handle idle timeout, when no incoming requests received in specified time.
         """

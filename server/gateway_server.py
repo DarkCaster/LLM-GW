@@ -3,7 +3,7 @@
 import aiohttp.web
 import python_lua_helper
 from utils.logger import get_logger
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 from .request_handler import RequestHandler
 
 
@@ -27,7 +27,7 @@ class GatewayServer:
         self.logger = get_logger(self.__class__.__name__)
 
         # Server state
-        self.app: Optional[aiohttp.web.Application] = None
+        self.app: aiohttp.web.Application | None = None
         self.runners: List[aiohttp.web.AppRunner] = []
         self.sites: List[aiohttp.web.TCPSite] = []
 
