@@ -1,4 +1,4 @@
-# LLM gateway - runner for OpenAI compatible LLM engines
+# LLM gateway - personal runner for LLAMA.CPP compatible LLM engines
 
 This project is a runner for a OpenAI API compatible LLM engines providing proxifying of LLM-requests (http+json) from entry point into LLM engine and vise versa.
 It intercepts incoming inference request (like /v1/chat/completions), tokenize the request (if needed) and select proper engine variant with proper settings for the request depending on model name, context requirements, and other parameters.
