@@ -75,8 +75,8 @@ llama_default_args = {
 llama_b7735_bin = [[C:\llama-b7735-bin-win-cuda-13.1-x64\llama-server.exe]]
 llama_b7735_tokenize_bin = [[C:\llama-b7735-bin-win-cuda-13.1-x64\llama-tokenize.exe]]
 
--- helper function to construct params for MoE models, probably not very optimal in terms of performance:
--- only load the most essential MoE model parts into VRAM with "-cmoe" flag to lower VRAM pressure and leave some space for desktop use
+-- helper function to construct params for MoE models,
+-- trying to best fit MoE models into VRAM to maximize performance
 function get_llama_moe_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	assert(type(ctx_sz)=="number", "ctx_sz param must be a number")
 	assert(type(ub)=="number" or type(ub)=="nil", "ub param must be a number or nil")
@@ -84,7 +84,8 @@ function get_llama_moe_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	assert(type(ctk)=="string" or type(ctk)=="nil", "ctk param must be a string or nil")
 	assert(type(ctv)=="string" or type(ctv)=="nil", "ctv param must be a string or nil")
 
-	local args = concat_arrays(llama_default_args, {"-ngl","999","-cmoe","-c",tostring(ctx_sz)})
+	-- local args = concat_arrays(llama_default_args, {"-ngl","999","-cmoe","-c",tostring(ctx_sz)})
+	local args = concat_arrays(llama_default_args, {"-c",tostring(ctx_sz),"-fit","on","--fit-ctx",tostring(ctx_sz),"--fit-target","256"})
 	if type(ub)=="number" then args = concat_arrays(args,{"-ub",tostring(ub)}) end
 	if type(b)=="number" then args = concat_arrays(args,{"-b",tostring(b)}) end
 	if type(ctk)=="string" then args = concat_arrays(args,{"-ctk",ctk}) end
@@ -102,8 +103,8 @@ qwen3_30b_instruct_model = {
 	connect = llama_url,
 	tokenization = { binary = llama_b7735_tokenize_bin, extra_args = { "-m", qwen3_30b_instruct_gguf }, extra_tokens_per_message = 8 },
 	variants = {
-		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_instruct_gguf,10000,4096,4096), context = 10000 },
-		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_instruct_gguf,20000,4096,4096), context = 20000 },
+		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_instruct_gguf,10000,2048,2048), context = 10000 },
+		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_instruct_gguf,20000,2048,2048), context = 20000 },
 		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_instruct_gguf,30000,2048,2048), context = 30000 },
 		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_instruct_gguf,40960,2048,2048), context = 40960 },
 		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_instruct_gguf,81920,1024,2048,"q8_0","q8_0"), context = 81920 },
@@ -117,8 +118,8 @@ qwen3_30b_coder_model = {
 	connect = llama_url,
 	tokenization = { binary = llama_b7735_tokenize_bin, extra_args = { "-m", qwen3_30b_coder_gguf }, extra_tokens_per_message = 8 },
 	variants = {
-		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_coder_gguf,10000,4096,4096), context = 10000 },
-		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_coder_gguf,20000,4096,4096), context = 20000 },
+		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_coder_gguf,10000,2048,2048), context = 10000 },
+		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_coder_gguf,20000,2048,2048), context = 20000 },
 		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_coder_gguf,30000,2048,2048), context = 30000 },
 		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_coder_gguf,40960,2048,2048), context = 40960 },
 		{ binary = llama_b7735_bin, args = get_llama_moe_args(qwen3_30b_coder_gguf,81920,1024,2048,"q8_0","q8_0"), context = 81920 },
