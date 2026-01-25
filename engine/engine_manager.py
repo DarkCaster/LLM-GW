@@ -253,14 +253,13 @@ class EngineManager:
         """
         Stop the currently running engine.
         """
-        if self._current_engine_process is None:
-            self.logger.debug("No current engine to stop")
-            return
-        self.logger.info(
-            f"Stopping current engine for model '{self._current_model_name}'"
-        )
         try:
-            await self._current_engine_process.stop(timeout=15.0)
+            if self._current_engine_process is not None:
+                self.logger.info(
+                    f"Stopping current engine for model '{self._current_model_name}'"
+                )
+                await self._current_engine_process.stop(timeout=15.0)
+                self.logger.info("Process stopped")
         except Exception as e:
             self.logger.error(f"Error stopping engine: {e}")
         # Clear current state
