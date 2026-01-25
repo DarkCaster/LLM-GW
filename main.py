@@ -33,8 +33,13 @@ async def async_main(cfg: python_lua_helper.PyLuaHelper):
         gateway_server = server.GatewayServer(request_handler, cfg)
 
         try:
-            # Run the server (blocks until interrupted)
-            await gateway_server.run()
+            # Start the server
+            await gateway_server.start()
+            # Wait forever (until interrupted)
+            logger.info("Press Ctrl+C to stop.")
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            logger.info("Received cancellation signal")
         except KeyboardInterrupt:
             logger.info("Received keyboard interrupt")
         except Exception as e:
@@ -46,6 +51,7 @@ async def async_main(cfg: python_lua_helper.PyLuaHelper):
             # Shutdown engine manager
             await engine_manager.shutdown()
             await request_handler.shutdown()
+            await gateway_server.stop()
 
 
 def main():

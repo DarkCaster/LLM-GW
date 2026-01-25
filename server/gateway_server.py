@@ -1,6 +1,5 @@
 # server/gateway_server.py
 
-import asyncio
 import aiohttp.web
 import python_lua_helper
 from utils.logger import get_logger
@@ -136,31 +135,6 @@ class GatewayServer:
         self.app = None
 
         self.logger.info("GatewayServer stopped")
-
-    async def run(self) -> None:
-        """
-        Start the server and run until interrupted.
-
-        Handles graceful shutdown on interrupt.
-        """
-        try:
-            # Start the server
-            await self.start()
-
-            # Wait forever (until interrupted)
-            self.logger.info("Server is running. Press Ctrl+C to stop.")
-            await asyncio.Event().wait()
-
-        except asyncio.CancelledError:
-            self.logger.info("Server received cancellation signal")
-        except KeyboardInterrupt:
-            self.logger.info("Server received keyboard interrupt")
-        except Exception as e:
-            self.logger.error(f"Unexpected error in server run loop: {e}")
-            raise
-        finally:
-            # Graceful shutdown
-            await self.stop()
 
     def _parse_address(self, address: str) -> Tuple[str, int]:
         """
