@@ -72,8 +72,8 @@ llama_default_args = {
 }
 
 -- full path to llama binaries, download from https://github.com/ggml-org/llama.cpp/releases
-llama_b7833_bin = [[C:\llama-b7833-cuda-13.1-x64\llama-server.exe]]
-llama_b7833_tokenize_bin = [[C:\llama-b7833-cuda-13.1-x64\llama-tokenize.exe]]
+llama_bin = [[C:\llama-b7833-cuda-13.1-x64\llama-server.exe]]
+llama_tokenize_bin = [[C:\llama-b7833-cuda-13.1-x64\llama-tokenize.exe]]
 
 -- helper function to construct default params for llama-server,
 -- trying to best fit models into VRAM and maximize performance, effective for MoE models
@@ -103,14 +103,14 @@ qwen3_30b_instruct_model = {
 	engine = presets.engines.llamacpp,
 	name = "qwen3-30b-instruct",
 	connect = llama_url,
-	tokenization = { binary = llama_b7833_tokenize_bin, extra_args = { "-m", qwen3_30b_instruct_gguf }, extra_tokens_per_message = 8 },
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_30b_instruct_gguf }, extra_tokens_per_message = 8 },
 	variants = {
-		{ binary = llama_b7833_bin, args = get_llama_args(qwen3_30b_instruct_gguf,10000,2048,2048), context = 10000 },
-		{ binary = llama_b7833_bin, args = get_llama_args(qwen3_30b_instruct_gguf,20000,2048,2048), context = 20000 },
-		{ binary = llama_b7833_bin, args = get_llama_args(qwen3_30b_instruct_gguf,30000,2048,2048), context = 30000 },
-		{ binary = llama_b7833_bin, args = get_llama_args(qwen3_30b_instruct_gguf,40960,2048,2048), context = 40960 },
-		{ binary = llama_b7833_bin, args = get_llama_args(qwen3_30b_instruct_gguf,81920,1024,2048,"q8_0","q8_0"), context = 81920 },
-		{ binary = llama_b7833_bin, args = get_llama_args(qwen3_30b_instruct_gguf,122880,512,2048,"q8_0","q8_0"), context = 122880 },
+		{ binary = llama_bin, args = get_llama_args(qwen3_30b_instruct_gguf,10000,2048,2048), context = 10000 },
+		{ binary = llama_bin, args = get_llama_args(qwen3_30b_instruct_gguf,20000,2048,2048), context = 20000 },
+		{ binary = llama_bin, args = get_llama_args(qwen3_30b_instruct_gguf,30000,2048,2048), context = 30000 },
+		{ binary = llama_bin, args = get_llama_args(qwen3_30b_instruct_gguf,40960,2048,2048), context = 40960 },
+		{ binary = llama_bin, args = get_llama_args(qwen3_30b_instruct_gguf,81920,1024,2048,"q8_0","q8_0"), context = 81920 },
+		{ binary = llama_bin, args = get_llama_args(qwen3_30b_instruct_gguf,122880,512,2048,"q8_0","q8_0"), context = 122880 },
 	},
 }
 
@@ -118,14 +118,14 @@ qwen3_30b_coder_model = {
 	engine = presets.engines.llamacpp,
 	name = "qwen3-30b-coder",
 	connect = llama_url,
-	tokenization = { binary = llama_b7833_tokenize_bin, extra_args = { "-m", qwen3_30b_coder_gguf }, extra_tokens_per_message = 8 },
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_30b_coder_gguf }, extra_tokens_per_message = 8 },
 	variants = {
-		{ binary = llama_b7833_bin, args = get_llama_args(qwen3_30b_coder_gguf,10000,2048,2048), context = 10000 },
-		{ binary = llama_b7833_bin, args = get_llama_args(qwen3_30b_coder_gguf,20000,2048,2048), context = 20000 },
-		{ binary = llama_b7833_bin, args = get_llama_args(qwen3_30b_coder_gguf,30000,2048,2048), context = 30000 },
-		{ binary = llama_b7833_bin, args = get_llama_args(qwen3_30b_coder_gguf,40960,2048,2048), context = 40960 },
-		{ binary = llama_b7833_bin, args = get_llama_args(qwen3_30b_coder_gguf,81920,1024,2048,"q8_0","q8_0"), context = 81920 },
-		{ binary = llama_b7833_bin, args = get_llama_args(qwen3_30b_coder_gguf,122880,512,2048,"q8_0","q8_0"), context = 122880 },
+		{ binary = llama_bin, args = get_llama_args(qwen3_30b_coder_gguf,10000,2048,2048), context = 10000 },
+		{ binary = llama_bin, args = get_llama_args(qwen3_30b_coder_gguf,20000,2048,2048), context = 20000 },
+		{ binary = llama_bin, args = get_llama_args(qwen3_30b_coder_gguf,30000,2048,2048), context = 30000 },
+		{ binary = llama_bin, args = get_llama_args(qwen3_30b_coder_gguf,40960,2048,2048), context = 40960 },
+		{ binary = llama_bin, args = get_llama_args(qwen3_30b_coder_gguf,81920,1024,2048,"q8_0","q8_0"), context = 81920 },
+		{ binary = llama_bin, args = get_llama_args(qwen3_30b_coder_gguf,122880,512,2048,"q8_0","q8_0"), context = 122880 },
 	},
 }
 
@@ -146,14 +146,14 @@ glm_47_flash_think_model = {
 	engine = presets.engines.llamacpp,
 	name = "glm-47-flash-think",
 	connect = llama_url,
-	tokenization = { binary = llama_b7833_tokenize_bin, extra_args = { "-m", glm_47_flash_gguf }, extra_tokens_per_message = 8 },
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", glm_47_flash_gguf }, extra_tokens_per_message = 8 },
 	variants = {
-		{ binary = llama_b7833_bin, args = get_glm_think_args(glm_47_flash_gguf,10000,2048,2048), context = 10000 },
-		{ binary = llama_b7833_bin, args = get_glm_think_args(glm_47_flash_gguf,20000,2048,2048), context = 20000 },
-		{ binary = llama_b7833_bin, args = get_glm_think_args(glm_47_flash_gguf,30000,2048,2048), context = 30000 },
-		{ binary = llama_b7833_bin, args = get_glm_think_args(glm_47_flash_gguf,40960,2048,2048), context = 40960 },
-		{ binary = llama_b7833_bin, args = get_glm_think_args(glm_47_flash_gguf,81920,1024,2048,"q8_0","q8_0"), context = 81920 },
-		{ binary = llama_b7833_bin, args = get_glm_think_args(glm_47_flash_gguf,122880,512,2048,"q8_0","q8_0"), context = 122880 },
+		{ binary = llama_bin, args = get_glm_think_args(glm_47_flash_gguf,10000,2048,2048), context = 10000 },
+		{ binary = llama_bin, args = get_glm_think_args(glm_47_flash_gguf,20000,2048,2048), context = 20000 },
+		{ binary = llama_bin, args = get_glm_think_args(glm_47_flash_gguf,30000,2048,2048), context = 30000 },
+		{ binary = llama_bin, args = get_glm_think_args(glm_47_flash_gguf,40960,2048,2048), context = 40960 },
+		{ binary = llama_bin, args = get_glm_think_args(glm_47_flash_gguf,81920,1024,2048,"q8_0","q8_0"), context = 81920 },
+		{ binary = llama_bin, args = get_glm_think_args(glm_47_flash_gguf,122880,512,2048,"q8_0","q8_0"), context = 122880 },
 	},
 }
 
@@ -161,14 +161,14 @@ glm_47_flash_model = {
 	engine = presets.engines.llamacpp,
 	name = "glm-47-flash",
 	connect = llama_url,
-	tokenization = { binary = llama_b7833_tokenize_bin, extra_args = { "-m", glm_47_flash_gguf }, extra_tokens_per_message = 8 },
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", glm_47_flash_gguf }, extra_tokens_per_message = 8 },
 	variants = {
-		{ binary = llama_b7833_bin, args = get_glm_args(glm_47_flash_gguf,10000,2048,2048), context = 10000 },
-		{ binary = llama_b7833_bin, args = get_glm_args(glm_47_flash_gguf,20000,2048,2048), context = 20000 },
-		{ binary = llama_b7833_bin, args = get_glm_args(glm_47_flash_gguf,30000,2048,2048), context = 30000 },
-		{ binary = llama_b7833_bin, args = get_glm_args(glm_47_flash_gguf,40960,2048,2048), context = 40960 },
-		{ binary = llama_b7833_bin, args = get_glm_args(glm_47_flash_gguf,81920,1024,2048,"q8_0","q8_0"), context = 81920 },
-		{ binary = llama_b7833_bin, args = get_glm_args(glm_47_flash_gguf,122880,512,2048,"q8_0","q8_0"), context = 122880 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,10000,2048,2048), context = 10000 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,20000,2048,2048), context = 20000 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,30000,2048,2048), context = 30000 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,40960,2048,2048), context = 40960 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,81920,1024,2048,"q8_0","q8_0"), context = 81920 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,122880,512,2048,"q8_0","q8_0"), context = 122880 },
 	},
 }
 
