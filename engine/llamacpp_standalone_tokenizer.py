@@ -82,17 +82,17 @@ class LlamaStandaloneTokenizer(StandaloneTokenizer):
             stdout_str = stdout.decode("utf-8", errors="replace").strip()
             # Parse the JSON-like number array format containing tokens "[24048, 198, n, ...]"
             # trim all text before last `[` character in stdout_str, save result to stdout_str
-            start_idx = stdout_str.rfind('[')
+            start_idx = stdout_str.rfind("[")
             if start_idx == -1:
                 self.logger.error("No '[' found in tokenizer output")
                 return max_tokens + 32
             stdout_str = stdout_str[start_idx:]
             # trim all text after first `]` character in stdout_str, save result to stdout_str
-            end_idx = stdout_str.find(']')
+            end_idx = stdout_str.find("]")
             if end_idx == -1:
                 self.logger.error("No ']' found in tokenizer output")
                 return max_tokens + 32
-            stdout_str = stdout_str[:end_idx]
+            stdout_str = stdout_str[: end_idx + 1]
             try:
                 tokens_array = json.loads(stdout_str)
                 if not isinstance(tokens_array, list):
