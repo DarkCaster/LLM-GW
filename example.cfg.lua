@@ -165,30 +165,10 @@ qwen3_30b_coder_model = {
 -- https://huggingface.co/unsloth/GLM-4.7-Flash-GGUF/tree/main
 glm_47_flash_gguf = [[C:\GLM\GLM-4.7-Flash-UD-Q4_K_XL.gguf]]
 
-function get_glm_think_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	return concat_arrays(args, {"--jinja", "--temp", "0.7", "--top-p", "1.0", "--min-p", "0.01", "--repeat-penalty", "1.0"})
-end
-
 function get_glm_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	local args = get_glm_think_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	return concat_arrays(args, {"--chat-template-kwargs", [[{"enable_thinking":false}]]})
+	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	return concat_arrays(args, {"--jinja", "--temp", "0.7", "--top-p", "0.95", "--min-p", "0.05", "--repeat-penalty", "1.0"})
 end
-
-glm_47_flash_think_model = {
-	engine = presets.engines.llamacpp,
-	name = "glm-47-flash-think",
-	connect = llama_url,
-	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", glm_47_flash_gguf }, extra_tokens_per_message = 8 },
-	variants = {
-		{ binary = llama_bin, args = get_glm_think_args(glm_47_flash_gguf,10000,2048,2048), context = 10000 },
-		{ binary = llama_bin, args = get_glm_think_args(glm_47_flash_gguf,20000,2048,2048), context = 20000 },
-		{ binary = llama_bin, args = get_glm_think_args(glm_47_flash_gguf,30000,2048,2048), context = 30000 },
-		{ binary = llama_bin, args = get_glm_think_args(glm_47_flash_gguf,40960,2048,2048), context = 40960 },
-		{ binary = llama_bin, args = get_glm_think_args(glm_47_flash_gguf,81920,2048,2048,"q8_0","q8_0"), context = 81920 },
-		{ binary = llama_bin, args = get_glm_think_args(glm_47_flash_gguf,122880,2048,2048,"q8_0","q8_0"), context = 122880 },
-	},
-}
 
 glm_47_flash_model = {
 	engine = presets.engines.llamacpp,
@@ -205,4 +185,24 @@ glm_47_flash_model = {
 	},
 }
 
-models = { qwen3_30b_instruct_model, qwen3_30b_thinking_model, qwen3_30b_coder_model, glm_47_flash_think_model, glm_47_flash_model }
+function get_glm_nothinking_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	local args = get_glm_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	return concat_arrays(args, {"--chat-template-kwargs", [[{"enable_thinking":false}]]})
+end
+
+glm_47_flash_nothinking_model = {
+	engine = presets.engines.llamacpp,
+	name = "glm-47-flash-nothinking",
+	connect = llama_url,
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", glm_47_flash_gguf }, extra_tokens_per_message = 8 },
+	variants = {
+		{ binary = llama_bin, args = get_glm_nothinking_args(glm_47_flash_gguf,10000,2048,2048), context = 10000 },
+		{ binary = llama_bin, args = get_glm_nothinking_args(glm_47_flash_gguf,20000,2048,2048), context = 20000 },
+		{ binary = llama_bin, args = get_glm_nothinking_args(glm_47_flash_gguf,30000,2048,2048), context = 30000 },
+		{ binary = llama_bin, args = get_glm_nothinking_args(glm_47_flash_gguf,40960,2048,2048), context = 40960 },
+		{ binary = llama_bin, args = get_glm_nothinking_args(glm_47_flash_gguf,81920,2048,2048,"q8_0","q8_0"), context = 81920 },
+		{ binary = llama_bin, args = get_glm_nothinking_args(glm_47_flash_gguf,122880,2048,2048,"q8_0","q8_0"), context = 122880 },
+	},
+}
+
+models = { qwen3_30b_instruct_model, qwen3_30b_thinking_model, qwen3_30b_coder_model, glm_47_flash_model, glm_47_flash_nothinking_model }
