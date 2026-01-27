@@ -129,20 +129,6 @@ qwen3_30b_coder_model = {
 	},
 }
 
-qwen3_14b_gguf = [[C:\Qwen\Qwen3-14B.IQ4_XS.gguf]]
-
-qwen3_14b_model = {
-	engine = presets.engines.llamacpp,
-	name = "qwen3-14b",
-	connect = llama_url,
-	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_14b_gguf }, extra_tokens_per_message = 8 },
-	variants = {
-		{ binary = llama_bin, args = get_llama_args(qwen3_14b_gguf,10000,2048,2048), context = 10000 },
-		{ binary = llama_bin, args = get_llama_args(qwen3_14b_gguf,20000,2048,2048), context = 20000 },
-		{ binary = llama_bin, args = get_llama_args(qwen3_14b_gguf,30000,2048,2048), context = 30000 },
-		{ binary = llama_bin, args = get_llama_args(qwen3_14b_gguf,40960,2048,2048), context = 40960 },
-	},
-}
 -- https://huggingface.co/unsloth/GLM-4.7-Flash-GGUF/tree/main
 glm_47_flash_gguf = [[C:\GLM\GLM-4.7-Flash-UD-Q4_K_XL.gguf]]
 
@@ -186,4 +172,4 @@ glm_47_flash_model = {
 	},
 }
 
-models = { qwen3_30b_instruct_model, qwen3_30b_coder_model, qwen3_14b_model, glm_47_flash_think_model, glm_47_flash_model }
+models = { qwen3_30b_instruct_model, qwen3_30b_coder_model, glm_47_flash_think_model, glm_47_flash_model }
