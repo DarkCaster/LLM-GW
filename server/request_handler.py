@@ -191,6 +191,16 @@ class RequestHandler:
                 return self._return_error("RequestHandler is shuting down", 500)
             self._idle_watchdog.disarm()
             try:
+                # Debug: write json for inspection
+                # try:
+                #     text = await request.text()
+                #     with open("request.dump.txt", "w", encoding="utf-8") as f:
+                #         f.write(text)
+                #     self.logger.info(
+                #         f"Wrote request dump ({len(text)} chars) to request.dump.txt"
+                #     )
+                # except Exception as e:
+                #    self.logger.warning(f"Failed to write debug dump file: {e}")
                 # Parse JSON body
                 try:
                     request_data = await request.json()
