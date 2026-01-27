@@ -43,9 +43,9 @@ class LlamaCppEngineClient(EngineClient):
             max_tokens = request_data.get("max_completion_tokens")
         if max_tokens is None:
             self.logger.warning(
-                "No max_tokens or max_completion_tokens in request, defaulting to 512"
+                "No max_tokens or max_completion_tokens in request, defaulting to 4096"
             )
-            max_tokens = 512
+            max_tokens = 4096
         # Get messages from request_data
         messages = request_data.get("messages")
         if messages is None:
