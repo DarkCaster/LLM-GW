@@ -54,6 +54,10 @@ class GatewayServer:
             "/v1/chat/completions",
             self.request_handler.handle_request,
         )
+        self.app.router.add_post(
+            "/v1/embeddings",
+            self.request_handler.handle_request,
+        )
         # Register simple CORS preflight request handlers
         self.app.router.add_options(
             "/v1/models",
@@ -61,6 +65,10 @@ class GatewayServer:
         )
         self.app.router.add_options(
             "/v1/chat/completions",
+            self._handle_cors_preflight,
+        )
+        self.app.router.add_options(
+            "/v1/embeddings",
             self._handle_cors_preflight,
         )
         self.logger.info("Routes registered")
