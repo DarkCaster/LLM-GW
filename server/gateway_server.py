@@ -46,11 +46,23 @@ class GatewayServer:
         self.app = aiohttp.web.Application()
 
         # Register routes
-        self.app.router.add_get("/v1/models", self.request_handler.handle_models_list)
-        self.app.router.add_post(
-            "/v1/chat/completions", self.request_handler.handle_request
+        self.app.router.add_get(
+            "/v1/models",
+            self.request_handler.handle_models_list,
         )
-
+        self.app.router.add_post(
+            "/v1/chat/completions",
+            self.request_handler.handle_request,
+        )
+        # Register simple CORS preflight request handlers
+        self.app.router.add_options(
+            "/v1/models",
+            self._handle_cors_preflight,
+        )
+        self.app.router.add_options(
+            "/v1/chat/completions",
+            self._handle_cors_preflight,
+        )
         self.logger.info("Routes registered")
 
         # Parse listen addresses from config
@@ -135,6 +147,21 @@ class GatewayServer:
         self.app = None
 
         self.logger.info("GatewayServer stopped")
+
+    def _handle_cors_preflight(
+        self, request: aiohttp.web.Request
+    ) -> aiohttp.web.Response:
+        """
+        Handle CORS preflight requests for any path.
+        """
+        return aiohttp.web.json_response(
+            {"message": "CORS Preflight OK"},
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
+        )
 
     def _parse_address(self, address: str) -> Tuple[str, int]:
         """
