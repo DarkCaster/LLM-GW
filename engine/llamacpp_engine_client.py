@@ -118,15 +118,13 @@ class LlamaCppEngineClient(EngineClient):
             aiohttp ClientResponse object, do not forget to release it manually after use
 
         Raises:
-            ValueError: If endpoint is not /v1/chat/completions
+            ValueError: If endpoint is not /v1/chat/completions or /v1/embeddings
         """
         # Check that this is a chat completions request
-        if path != "/v1/chat/completions":
+        if path != "/v1/chat/completions" and path != "/v1/embeddings":
             self.logger.error(
                 f"Unsupported URL path/endpoint for LlamaCppEngine: {path}"
             )
-        # Transform request data
-        transformed_data = self._transform_request(request_data)
         # Forward the request to llama.cpp server
         full_url = f"{self._base_url}{path}"
         self.logger.debug(f"Forwarding request to {full_url}")
@@ -134,29 +132,13 @@ class LlamaCppEngineClient(EngineClient):
         self._request_task = asyncio.create_task(
             self._session.post(
                 full_url,
-                json=transformed_data,
+                json=request_data,
                 headers={"Content-Type": "application/json"},
                 timeout=aiohttp.ClientTimeout(total=sys.maxsize),
             )
         )
         response = await self._request_task
         return response
-
-    def _transform_request(self, request_data: dict) -> dict:
-        """
-        Transform request data before forwarding to llama.cpp.
-
-        For now, this is a stub that returns the original request.
-        Will be properly implemented later to handle llama.cpp-specific transformations if needed.
-
-        Args:
-            request_data: Original request data
-
-        Returns:
-            Transformed request data (stub: returns original)
-        """
-        # Stub implementation - will be addressed later
-        return request_data
 
     def terminate_request(self) -> None:
         """
