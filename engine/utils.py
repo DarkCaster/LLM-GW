@@ -15,11 +15,13 @@ def parse_openai_request_content(request_data: dict) -> tuple[str, str, int, int
     if isinstance(input, str):
         prompt = input
         content_type = "input_str"
+        message_count = 1
     elif isinstance(input, list):
         content_type = "input_list"
         for item in input:
             if isinstance(item, str):
                 prompt += item
+                message_count += 1
     elif isinstance(messages, list):
         content_type = "messages"
         for message in messages:
@@ -43,5 +45,6 @@ def parse_openai_request_content(request_data: dict) -> tuple[str, str, int, int
                 f"No max_tokens or max_completion_tokens in request, defaulting to {max_tokens}"
             )
     else:
+        message_count = 1
         log.error("No supported data for tokenization found in request")
     return content_type, prompt, max_tokens, message_count

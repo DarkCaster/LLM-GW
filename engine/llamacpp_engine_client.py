@@ -110,10 +110,7 @@ class LlamaCppEngineClient(EngineClient):
         self, path: str, request_data: dict
     ) -> aiohttp.ClientResponse:
         """
-        Forward request to llama.cpp server endpoint.
-
-        Only supports /v1/chat/completions endpoint for now. Handles both normal
-        and streaming responses.
+        Forward request to llama.cpp server endpoint. Handles both normal and streaming responses.
 
         Args:
             path: URL path/endpoint of the request to forwarding, example: /v1/chat/completions
@@ -121,15 +118,7 @@ class LlamaCppEngineClient(EngineClient):
 
         Returns:
             aiohttp ClientResponse object, do not forget to release it manually after use
-
-        Raises:
-            ValueError: If endpoint is not /v1/chat/completions or /v1/embeddings
         """
-        # Check that this is a chat completions request
-        if path != "/v1/chat/completions" and path != "/v1/embeddings":
-            self.logger.error(
-                f"Unsupported URL path/endpoint for LlamaCppEngine: {path}"
-            )
         # Forward the request to llama.cpp server
         full_url = f"{self._base_url}{path}"
         self.logger.debug(f"Forwarding request to {full_url}")

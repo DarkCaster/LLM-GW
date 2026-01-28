@@ -223,7 +223,7 @@ class RequestHandler:
                         engine_client,
                         self._idle_timeout,
                     ) = await self._model_selector.select_variant(
-                        model_name, request_data
+                        path, model_name, request_data
                     )
                 except ValueError as e:
                     return self._return_error("Model selection failed", 400, e)

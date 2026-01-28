@@ -184,7 +184,6 @@ This will return an OpenAI-compatible list of all configured model names.
 **Known Limitations:**
 
 - Only the `/v1/chat/completions` endpoint is implemented and somewhat tested
-- The `/v1/embeddings` endpoint is not yet implemented
 - Only `llama.cpp` engine type is supported (other engine types can be added via the extensible architecture)
 - Error handling may be incomplete in edge cases
 - Documentation may lag behind implementation changes

@@ -149,6 +149,9 @@ class EngineManager:
         cfg_engine_type = self.cfg.get(f"models.{model_index}.engine")
         # NOTE: engine specifig setup here:
         if cfg_engine_type == "llama.cpp":
+            # Do not use standalone tokenizer if not defined
+            if self.cfg.get_type(f"models.{model_index}.tokenization") != "table":
+                return None
             return LlamaStandaloneTokenizer(
                 self.cfg.get_int(
                     f"models.{model_index}.tokenization.extra_tokens_per_message"
@@ -161,7 +164,7 @@ class EngineManager:
 
     async def ensure_engine(
         self, model_name: str, required_config: dict
-    ) -> tuple[EngineClient, float, int]:
+    ) -> tuple[EngineClient, float]:
         """
         Ensure the correct engine is running with the required configuration.
 
@@ -170,7 +173,7 @@ class EngineManager:
             required_config: Configuration dictionary with variant_index
 
         Returns:
-            EngineClient instance for the running engine with proposed idle timeout and loaded variant index if applicable
+            EngineClient instance for the running engine with proposed idle timeout
 
         Raises:
             ValueError: If model not found, engine type not supported, or config invalid
@@ -186,11 +189,7 @@ class EngineManager:
                     self.logger.debug(
                         f"Current engine for model '{model_name}' is already running and healthy"
                     )
-                    return (
-                        self._current_engine_client,
-                        self._current_idle_timeout,
-                        self._current_config.get("variant_index", 0),
-                    )
+                    return self._current_engine_client, self._current_idle_timeout
                 else:
                     self.logger.info(
                         f"Current engine for model '{model_name}' failed health check"
@@ -227,11 +226,7 @@ class EngineManager:
         self.logger.debug(f"Starting new engine for model '{model_name}'")
         await self.stop_current_engine()
         await self._start_new_engine(model_name, required_config, cfg_engine_type)
-        return (
-            self._current_engine_client,
-            self._current_idle_timeout,
-            self._current_config.get("variant_index", 0),
-        )
+        return self._current_engine_client, self._current_idle_timeout
 
     async def stop_current_engine(self) -> None:
         """
