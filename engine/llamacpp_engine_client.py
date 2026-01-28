@@ -4,6 +4,7 @@ import sys
 import aiohttp
 import asyncio
 from .engine_client import EngineClient
+from .utils import parse_openai_request_content
 
 
 class LlamaCppEngineClient(EngineClient):
@@ -37,44 +38,41 @@ class LlamaCppEngineClient(EngineClient):
         Returns:
             Estimated number of context size tokens needed to process request
         """
-        # Get max_tokens field from request_data
-        max_tokens = request_data.get("max_tokens")
-        if max_tokens is None:
-            max_tokens = request_data.get("max_completion_tokens")
-        if max_tokens is None:
-            self.logger.warning(
-                "No max_tokens or max_completion_tokens in request, defaulting to 4096"
-            )
-            max_tokens = 4096
-        # Get messages from request_data
-        messages = request_data.get("messages")
-        if messages is None:
-            self.logger.error("No messages field in request_data")
-            return max_tokens + 32
-        # Call /apply-template endpoint
-        apply_template_url = f"{self._base_url}/apply-template"
+        # Parse request
         try:
-            async with self._session.post(
-                apply_template_url,
-                json={"messages": messages},
-                headers={"Content-Type": "application/json"},
-                timeout=aiohttp.ClientTimeout(total=60.0),
-            ) as response:
-                if response.status != 200:
-                    self.logger.error(
-                        f"/apply-template returned status {response.status}"
-                    )
-                    return max_tokens + 32
-                template_result = await response.json()
+            content_type, prompt, max_tokens, _ = parse_openai_request_content(
+                request_data
+            )
         except Exception as e:
-            self.logger.error(f"Error calling /apply-template: {e}")
-            return max_tokens + 32
-        # Get prompt field from response
-        prompt = template_result.get("prompt")
-        if prompt is None:
-            self.logger.error("No prompt field in /apply-template response")
-            return max_tokens + 32
-        # Call /tokenize endpoint
+            self.logger.error(f"Error parsing request_data: {e}")
+            return 1
+        # if our content type is messages - apply chat template to them
+        if content_type == "messages":
+            # Get messages from request_data
+            messages = request_data.get("messages")
+            # Call /apply-template endpoint
+            try:
+                async with self._session.post(
+                    f"{self._base_url}/apply-template",
+                    json={"messages": messages},
+                    headers={"Content-Type": "application/json"},
+                    timeout=aiohttp.ClientTimeout(total=60.0),
+                ) as response:
+                    if response.status != 200:
+                        self.logger.error(
+                            f"/apply-template returned status {response.status}"
+                        )
+                        return max_tokens
+                    template_result = await response.json()
+            except Exception as e:
+                self.logger.error(f"Error calling /apply-template: {e}")
+                return max_tokens
+            # Get prompt field from response
+            prompt = template_result.get("prompt")
+            if prompt is None:
+                self.logger.error("No prompt field in /apply-template response")
+                return max_tokens
+        # Tokenize content
         tokenize_url = f"{self._base_url}/tokenize"
         try:
             async with self._session.post(
@@ -85,19 +83,19 @@ class LlamaCppEngineClient(EngineClient):
             ) as response:
                 if response.status != 200:
                     self.logger.error(f"/tokenize returned status {response.status}")
-                    return max_tokens + 32
+                    return max_tokens
                 tokenize_result = await response.json()
         except Exception as e:
             self.logger.error(f"Error calling /tokenize: {e}")
-            return max_tokens + 32
+            return max_tokens
         # Get tokens array from response
         tokens = tokenize_result.get("tokens")
         if tokens is None or not isinstance(tokens, list):
             self.logger.error("No tokens field (or not a list) in /tokenize response")
-            return max_tokens + 32
+            return max_tokens
         # Calculate total context size needed
         token_count = len(tokens)
-        total_tokens = token_count + max_tokens + 32
+        total_tokens = token_count + max_tokens
         self.logger.debug(
             f"Token estimation: prompt={token_count}, max_tokens={max_tokens}, total={total_tokens}"
         )

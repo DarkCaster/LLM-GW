@@ -3,6 +3,7 @@ import json
 import os
 from typing import List
 from .standalone_tokenizer import StandaloneTokenizer
+from .utils import parse_openai_request_content
 
 
 class LlamaStandaloneTokenizer(StandaloneTokenizer):
@@ -16,44 +17,14 @@ class LlamaStandaloneTokenizer(StandaloneTokenizer):
         )
 
     async def estimate_tokens(self, request_data: dict) -> int:
-        combined_string = ""
-        max_tokens = 1
-        messages_count = 0
-        input = request_data.get("input")
-        messages = request_data.get("messages")
-        # Try parsing text from `input` field
-        if isinstance(input, str):
-            combined_string = input
-            messages_count = 1
-        elif isinstance(input, list):
-            for item in input:
-                if isinstance(item, str):
-                    combined_string += item
-                    messages_count += 1
-        elif isinstance(messages, list):
-            for message in messages:
-                content = message.get("content", "")
-                if isinstance(content, str):
-                    combined_string += content + "\n"
-                    messages_count += 1
-                elif isinstance(content, list):
-                    # Handle multi-modal content arrays
-                    for item in content:
-                        if isinstance(item, dict) and item.get("type") == "text":
-                            combined_string += item.get("text", "") + "\n"
-                            messages_count += 1
-            # Get max_tokens field from request_data
-            max_tokens = request_data.get("max_tokens")
-            if max_tokens is None:
-                max_tokens = request_data.get("max_completion_tokens")
-            if max_tokens is None:
-                max_tokens = 4096
-                self.logger.warning(
-                    f"No max_tokens or max_completion_tokens in request, defaulting to {max_tokens}"
-                )
-        else:
-            self.logger.error("No supported data for tokenization found in request")
-            return max_tokens
+        # Parse request
+        try:
+            _, content_string, max_tokens, message_count = parse_openai_request_content(
+                request_data
+            )
+        except Exception as e:
+            self.logger.error(f"Error parsing request_data: {e}")
+            return 1
         # Get workdir from binary base path
         workdir = os.path.dirname(os.path.abspath(self._binary_path))
         # Run llama-tokenizer process with provided args, send combined string to process stdin
@@ -71,7 +42,7 @@ class LlamaStandaloneTokenizer(StandaloneTokenizer):
             )
             # Send combined string to stdin and wait for process to complete
             stdout, stderr = await process.communicate(
-                input=combined_string.encode("utf-8")
+                input=content_string.encode("utf-8")
             )
             # Log stderr if present
             if stderr:
@@ -101,7 +72,7 @@ class LlamaStandaloneTokenizer(StandaloneTokenizer):
                 # Calculate token count in array
                 token_count = len(tokens_array)
                 self.logger.debug(
-                    f"Tokenizer returned {token_count} tokens for {messages_count} messages"
+                    f"Tokenizer returned {token_count} tokens for {message_count} messages"
                 )
             except json.JSONDecodeError as e:
                 self.logger.error(
@@ -112,10 +83,10 @@ class LlamaStandaloneTokenizer(StandaloneTokenizer):
             self.logger.error(f"Error running tokenizer process: {e}")
             return max_tokens
         total_tokens = token_count + max_tokens
-        total_tokens += messages_count * self._add_tokens_per_message
+        total_tokens += message_count * self._add_tokens_per_message
         self.logger.debug(
             f"Token estimation: prompt={token_count}, max_tokens={max_tokens}, "
-            f"messages_count={messages_count}, extra_per_message={self._add_tokens_per_message}, "
+            f"message_count={message_count}, extra_per_message={self._add_tokens_per_message}, "
             f"total={total_tokens}"
         )
         return total_tokens
