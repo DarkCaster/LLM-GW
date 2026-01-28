@@ -89,10 +89,12 @@ local function check_model(model, model_name)
 	assert_positive_number(model.health_check_timeout, base_path .. ".health_check_timeout")
 	assert_positive_number(model.engine_startup_timeout, base_path .. ".engine_startup_timeout")
 	assert_positive_number(model.engine_idle_timeout, base_path .. ".engine_idle_timeout")
-	-- Validate tokenization table parameters
-	assert_exists(model.tokenization, base_path .. ".tokenization")
-	assert_type(model.tokenization, "table", base_path .. ".tokenization")
-	check_llamacpp_tokenization(model.tokenization, model_name)
+	-- Validate tokenization table parameters, if present
+	if model.tokenization ~= nil then
+		assert_exists(model.tokenization, base_path .. ".tokenization")
+		assert_type(model.tokenization, "table", base_path .. ".tokenization")
+		check_llamacpp_tokenization(model.tokenization, model_name)
+	end
 	-- Check variants (mandatory)
 	assert_exists(model.variants, base_path .. ".variants")
 	assert_type(model.variants, "table", base_path .. ".variants")

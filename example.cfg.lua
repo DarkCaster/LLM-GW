@@ -21,9 +21,9 @@ example_model = {
 	-- health_check_timeout = 5.00, -- optional param, if missing, it will use server.health_check_timeout, must be > 0
 	-- engine_startup_timeout = 60.0, -- optional param, if missing, it will use server.engine_startup_timeout, must be > 0
 	-- engine_idle_timeout = 120.0, -- optional param, if missing, it will use server.engine_startup_timeout, must be > 0
-	tokenization = { -- manual tokenization
+	tokenization = { -- manual tokenization, this table is OPTIONAL
 		-- used for initial context size requirements estimation when llama-server is not running
-		-- this estimation is less presise than tokenize query with the running llama-server because chat-template is not applied to the messages
+		-- this estimation is less precise than tokenize query with the running llama-server because chat-template is not applied to the messages
 		binary = "/path/to/the/llama-tokenize/binary",
 		-- base_args = { "--log-disable", "--stdin", "--ids" }, -- optional, only enable to override internal args
 		extra_args = { "-m", "/path/to/model.gguf/file" }, -- extra arguments needed for llama-tokenize to work, use to pass model name
@@ -216,7 +216,6 @@ snowflake_arctic_embed_model = {
 	engine = presets.engines.llamacpp,
 	name = "snowflake-arctic-embed",
 	connect = llama_url,
-	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", snowflake_arctic_embed_gguf }, extra_tokens_per_message = 8 },
 	variants = {
 		{ binary = llama_bin, args = get_arctic_args(snowflake_arctic_embed_gguf), context = 8192 },
 	},
