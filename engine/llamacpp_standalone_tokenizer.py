@@ -16,44 +16,44 @@ class LlamaStandaloneTokenizer(StandaloneTokenizer):
         )
 
     async def estimate_tokens(self, request_data: dict) -> int:
-        # Get max_tokens field from request_data
-        max_tokens = request_data.get("max_tokens")
-        if max_tokens is None:
-            max_tokens = request_data.get("max_completion_tokens")
-        if max_tokens is None:
-            self.logger.warning(
-                "No max_tokens or max_completion_tokens in request, defaulting to 4096"
-            )
-            max_tokens = 4096
-        # Get messages from request_data
-        messages = request_data.get("messages")
-        if messages is None:
-            self.logger.error("No messages field in request_data")
-            return max_tokens + 32
-        # Calculate messages count
-        messages_count = len(messages)
-        # Combine all message-contents together into single combined string
         combined_string = ""
-        for message in messages:
-            content = message.get("content", "")
-            if isinstance(content, str):
-                combined_string += content + "\n"
-            elif isinstance(content, list):
-                # Handle multi-modal content arrays
-                for item in content:
-                    if isinstance(item, dict) and item.get("type") == "text":
-                        combined_string += item.get("text", "") + "\n"
-
-        # Debug: write combined_string to file for inspection
-        # try:
-        #     with open("LlamaStandaloneTokenizer.dump.txt", "w", encoding="utf-8") as f:
-        #         f.write(combined_string)
-        #     self.logger.debug(
-        #         f"Wrote combined_string ({len(combined_string)} chars) to LlamaStandaloneTokenizer.dump.txt"
-        #     )
-        # except Exception as e:
-        #    self.logger.warning(f"Failed to write debug dump file: {e}")
-
+        max_tokens = 1
+        messages_count = 0
+        input = request_data.get("input")
+        messages = request_data.get("messages")
+        # Try parsing text from `input` field
+        if isinstance(input, str):
+            combined_string = input
+            messages_count = 1
+        elif isinstance(input, list):
+            for item in input:
+                if isinstance(item, str):
+                    combined_string += item
+                    messages_count += 1
+        elif isinstance(messages, list):
+            for message in messages:
+                content = message.get("content", "")
+                if isinstance(content, str):
+                    combined_string += content + "\n"
+                    messages_count += 1
+                elif isinstance(content, list):
+                    # Handle multi-modal content arrays
+                    for item in content:
+                        if isinstance(item, dict) and item.get("type") == "text":
+                            combined_string += item.get("text", "") + "\n"
+                            messages_count += 1
+            # Get max_tokens field from request_data
+            max_tokens = request_data.get("max_tokens")
+            if max_tokens is None:
+                max_tokens = request_data.get("max_completion_tokens")
+            if max_tokens is None:
+                max_tokens = 4096
+                self.logger.warning(
+                    f"No max_tokens or max_completion_tokens in request, defaulting to {max_tokens}"
+                )
+        else:
+            self.logger.error("No supported data for tokenization found in request")
+            return max_tokens
         # Get workdir from binary base path
         workdir = os.path.dirname(os.path.abspath(self._binary_path))
         # Run llama-tokenizer process with provided args, send combined string to process stdin
@@ -85,19 +85,19 @@ class LlamaStandaloneTokenizer(StandaloneTokenizer):
             start_idx = stdout_str.rfind("[")
             if start_idx == -1:
                 self.logger.error("No '[' found in tokenizer output")
-                return max_tokens + 32
+                return max_tokens
             stdout_str = stdout_str[start_idx:]
             # trim all text after first `]` character in stdout_str, save result to stdout_str
             end_idx = stdout_str.find("]")
             if end_idx == -1:
                 self.logger.error("No ']' found in tokenizer output")
-                return max_tokens + 32
+                return max_tokens
             stdout_str = stdout_str[: end_idx + 1]
             try:
                 tokens_array = json.loads(stdout_str)
                 if not isinstance(tokens_array, list):
                     self.logger.error(f"Tokenizer output is not a list: {stdout_str}")
-                    return max_tokens + 32
+                    return max_tokens
                 # Calculate token count in array
                 token_count = len(tokens_array)
                 self.logger.debug(
@@ -107,11 +107,11 @@ class LlamaStandaloneTokenizer(StandaloneTokenizer):
                 self.logger.error(
                     f"Failed to parse tokenizer output as JSON: {e}, output: {stdout_str}"
                 )
-                return max_tokens + 32
+                return max_tokens
         except Exception as e:
             self.logger.error(f"Error running tokenizer process: {e}")
-            return max_tokens + 32
-        total_tokens = token_count + max_tokens + 32
+            return max_tokens
+        total_tokens = token_count + max_tokens
         total_tokens += messages_count * self._add_tokens_per_message
         self.logger.debug(
             f"Token estimation: prompt={token_count}, max_tokens={max_tokens}, "
