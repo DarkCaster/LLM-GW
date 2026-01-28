@@ -205,4 +205,21 @@ glm_47_flash_nothinking_model = {
 	},
 }
 
-models = { qwen3_30b_instruct_model, qwen3_30b_thinking_model, qwen3_30b_coder_model, glm_47_flash_model, glm_47_flash_nothinking_model }
+-- https://huggingface.co/Casual-Autopsy/snowflake-arctic-embed-l-v2.0-gguf/tree/main
+snowflake_arctic_embed_gguf = [[C:\Embedding\snowflake-arctic-embed-l-v2.0-f16.gguf]]
+
+function get_arctic_args(gguf)
+	return concat_arrays(llama_default_args,{"--embedding", "-c", "8192", "-ub", "4096", "-b", "4096", "-fit", "on", "--fit-ctx", "8192", "--fit-target", "256", "-m", gguf})
+end
+
+snowflake_arctic_embed_model = {
+	engine = presets.engines.llamacpp,
+	name = "snowflake-arctic-embed",
+	connect = llama_url,
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", snowflake_arctic_embed_gguf }, extra_tokens_per_message = 8 },
+	variants = {
+		{ binary = llama_bin, args = get_arctic_args(snowflake_arctic_embed_gguf), context = 8192 },
+	},
+}
+
+models = { qwen3_30b_instruct_model, qwen3_30b_thinking_model, qwen3_30b_coder_model, glm_47_flash_model, glm_47_flash_nothinking_model, snowflake_arctic_embed_model }
