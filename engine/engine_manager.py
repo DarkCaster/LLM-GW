@@ -243,7 +243,7 @@ class EngineManager:
                     f"Stopping current engine for model '{self._current_model_name}'"
                 )
                 await self._current_engine_process.stop(timeout=15.0)
-                self.logger.info("Process stopped")
+                self.logger.debug("Engine process stopped")
         except Exception as e:
             self.logger.error(f"Error stopping engine: {e}")
         # Clear current state
@@ -253,7 +253,6 @@ class EngineManager:
         self._current_config = None
         self._current_engine_type = None
         self._current_idle_timeout = sys.float_info.max
-        self.logger.info("Current engine stopped and state cleared")
 
     async def _start_new_engine(
         self, model_name: str, required_config: dict, engine_type: str
