@@ -19,7 +19,7 @@ class LlamaStandaloneTokenizer(StandaloneTokenizer):
     async def estimate_tokens(self, request_data: dict) -> int:
         # Parse request
         try:
-            _, content_string, max_tokens, message_count = parse_openai_request_content(
+            _, prompt, max_tokens, message_count = parse_openai_request_content(
                 request_data
             )
         except Exception as e:
@@ -40,9 +40,9 @@ class LlamaStandaloneTokenizer(StandaloneTokenizer):
                 stderr=asyncio.subprocess.PIPE,
                 cwd=workdir,
             )
-            # Send combined string to stdin and wait for process to complete
+            # Send content prompt to stdin and wait for process to complete
             stdout, stderr = await process.communicate(
-                input=content_string.encode("utf-8")
+                input=prompt.encode("utf-8")
             )
             # Log stderr if present
             if stderr:

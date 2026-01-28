@@ -46,7 +46,7 @@ class LlamaCppEngineClient(EngineClient):
         except Exception as e:
             self.logger.error(f"Error parsing request_data: {e}")
             return 1
-        # if our content type is messages - apply chat template to them
+        # if our content type is "messages" - we can construct more accurate prompt by wrapping it with chat template
         if content_type == "messages":
             # Get messages from request_data
             messages = request_data.get("messages")
@@ -72,6 +72,11 @@ class LlamaCppEngineClient(EngineClient):
             if prompt is None:
                 self.logger.error("No prompt field in /apply-template response")
                 return max_tokens
+        #TODO: here we can add support for more content types for precise estimation it needed
+        else:
+            self.logger.warning(
+                "Trying to estimate token-count for unsupported request type or content"
+            )
         # Tokenize content
         tokenize_url = f"{self._base_url}/tokenize"
         try:
