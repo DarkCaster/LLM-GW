@@ -107,7 +107,7 @@ qwen3_next_80b_thinking_gguf = [[C:\Qwen\Qwen3-Next-80B-A3B-Thinking-UD-IQ2_XXS.
 
 function get_qwen3moe_instr_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	return concat_arrays(args, {"--jinja", "--temp", "0.7", "--min-p", "0.00", "--top-p", "0.80", "--top-k", "20", "--presence-penalty", "0.1", "--repeat-penalty", "1.05"})
+	return concat_arrays(args, {"--spec-type", "ngram-map-k", "--spec-ngram-size-n", "8", "--spec-ngram-size-m", "8", "--spec-ngram-min-hits", "2", "--jinja", "--temp", "0.7", "--min-p", "0.00", "--top-p", "0.80", "--top-k", "20", "--presence-penalty", "0.1", "--repeat-penalty", "1.05"})
 end
 
 -- Qwen3-MoE model examples suitable for HW configs with 32G RAM + 8G VRAM (will fill almost all RAM and VRAM)
@@ -151,7 +151,7 @@ qwen3_next_80b_instruct_model = {
 
 function get_qwen3moe_think_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	return concat_arrays(args, {"--jinja", "--temp", "0.6", "--min-p", "0.00", "--top-p", "0.95", "--top-k", "20", "--presence-penalty", "0.1", "--repeat-penalty", "1.05"})
+	return concat_arrays(args, {"--spec-type", "ngram-map-k", "--spec-ngram-size-n", "8", "--spec-ngram-size-m", "8", "--spec-ngram-min-hits", "2", "--jinja", "--temp", "0.6", "--min-p", "0.00", "--top-p", "0.95", "--top-k", "20", "--presence-penalty", "0.1", "--repeat-penalty", "1.05"})
 end
 
 qwen3_30b_thinking_model = {
