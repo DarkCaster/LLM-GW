@@ -127,20 +127,25 @@ qwen3_30b_instruct_model = {
 	},
 }
 
+function get_qwen3moe_next_instr_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	return concat_arrays(args, {"--swa-checkpoints", "0", "--jinja", "--temp", "0.7", "--min-p", "0.00", "--top-p", "0.80", "--top-k", "20", "--presence-penalty", "0.1", "--repeat-penalty", "1.05"})
+end
+
 qwen3_next_80b_instruct_model = {
 	engine = presets.engines.llamacpp,
 	name = "qwen3-next-80b-instruct",
 	connect = llama_url,
 	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_next_80b_instruct_gguf }, extra_tokens_per_message = 8 },
 	variants = {
-		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_next_80b_instruct_gguf,10240,1024,2048), context = 10240 },
-		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_next_80b_instruct_gguf,20480,1024,2048), context = 20480 },
-		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_next_80b_instruct_gguf,30720,1024,2048), context = 30720 },
-		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_next_80b_instruct_gguf,40960,1024,2048), context = 40960 },
-		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_next_80b_instruct_gguf,61440,1024,2048), context = 61440 },
-		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_next_80b_instruct_gguf,81920,1024,2048), context = 81920 },
-		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_next_80b_instruct_gguf,102400,1024,2048), context = 102400 },
-		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_next_80b_instruct_gguf,122880,1024,2048), context = 122880 },
+		{ binary = llama_bin, args = get_qwen3moe_next_instr_args(qwen3_next_80b_instruct_gguf,10240,1024,2048), context = 10240 },
+		{ binary = llama_bin, args = get_qwen3moe_next_instr_args(qwen3_next_80b_instruct_gguf,20480,1024,2048), context = 20480 },
+		{ binary = llama_bin, args = get_qwen3moe_next_instr_args(qwen3_next_80b_instruct_gguf,30720,1024,2048), context = 30720 },
+		{ binary = llama_bin, args = get_qwen3moe_next_instr_args(qwen3_next_80b_instruct_gguf,40960,1024,2048), context = 40960 },
+		{ binary = llama_bin, args = get_qwen3moe_next_instr_args(qwen3_next_80b_instruct_gguf,61440,1024,2048), context = 61440 },
+		{ binary = llama_bin, args = get_qwen3moe_next_instr_args(qwen3_next_80b_instruct_gguf,81920,1024,2048), context = 81920 },
+		{ binary = llama_bin, args = get_qwen3moe_next_instr_args(qwen3_next_80b_instruct_gguf,102400,1024,2048), context = 102400 },
+		{ binary = llama_bin, args = get_qwen3moe_next_instr_args(qwen3_next_80b_instruct_gguf,122880,1024,2048), context = 122880 },
 	},
 }
 
@@ -164,20 +169,25 @@ qwen3_30b_thinking_model = {
 	},
 }
 
+function get_qwen3moe_next_think_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	return concat_arrays(args, {"--swa-checkpoints", "0", "--jinja", "--temp", "0.6", "--min-p", "0.00", "--top-p", "0.95", "--top-k", "20", "--presence-penalty", "0.1", "--repeat-penalty", "1.05"})
+end
+
 qwen3_next_80b_thinking_model = {
 	engine = presets.engines.llamacpp,
 	name = "qwen3-next-80b-thinking",
 	connect = llama_url,
 	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_next_80b_thinking_gguf }, extra_tokens_per_message = 8 },
 	variants = {
-		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_next_80b_thinking_gguf,10240,1024,2048), context = 10240 },
-		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_next_80b_thinking_gguf,20480,1024,2048), context = 20480 },
-		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_next_80b_thinking_gguf,30720,1024,2048), context = 30720 },
-		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_next_80b_thinking_gguf,40960,1024,2048), context = 40960 },
-		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_next_80b_thinking_gguf,61440,1024,2048), context = 61440 },
-		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_next_80b_thinking_gguf,81920,1024,2048), context = 81920 },
-		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_next_80b_thinking_gguf,102400,1024,2048), context = 102400 },
-		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_next_80b_thinking_gguf,122880,1024,2048), context = 122880 },
+		{ binary = llama_bin, args = get_qwen3moe_next_think_args(qwen3_next_80b_thinking_gguf,10240,1024,2048), context = 10240 },
+		{ binary = llama_bin, args = get_qwen3moe_next_think_args(qwen3_next_80b_thinking_gguf,20480,1024,2048), context = 20480 },
+		{ binary = llama_bin, args = get_qwen3moe_next_think_args(qwen3_next_80b_thinking_gguf,30720,1024,2048), context = 30720 },
+		{ binary = llama_bin, args = get_qwen3moe_next_think_args(qwen3_next_80b_thinking_gguf,40960,1024,2048), context = 40960 },
+		{ binary = llama_bin, args = get_qwen3moe_next_think_args(qwen3_next_80b_thinking_gguf,61440,1024,2048), context = 61440 },
+		{ binary = llama_bin, args = get_qwen3moe_next_think_args(qwen3_next_80b_thinking_gguf,81920,1024,2048), context = 81920 },
+		{ binary = llama_bin, args = get_qwen3moe_next_think_args(qwen3_next_80b_thinking_gguf,102400,1024,2048), context = 102400 },
+		{ binary = llama_bin, args = get_qwen3moe_next_think_args(qwen3_next_80b_thinking_gguf,122880,1024,2048), context = 122880 },
 	},
 }
 
