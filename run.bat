@@ -27,20 +27,11 @@ if not exist "%venv_dir%" (
     exit /b 1
 )
 
-set "UV_COMPILE_BYTECODE=1"
-set "UV_PYTHON_INSTALL_REGISTRY=0"
-set "UV_PYTHON_BIN_DIR=%py_dir%\python_bin"
-set "UV_PYTHON_INSTALL_DIR=%py_dir%\dists"
-set "UV_TOOL_BIN_DIR=%py_dir%\tool_bin"
-set "UV_TOOL_DIR=%py_dir%\tool"
-set "UV_CACHE_DIR=%py_dir%\cache"
-set "UV_LINK_MODE=copy"
-
 echo Activating venv
 call "%venv_dir%\Scripts\activate.bat"
 
 echo Starting up
-uv run "%script_dir%main.py" %*
+"%venv_dir%\Scripts\python.exe" "%script_dir%main.py" %*
 
 endlocal
 pause
