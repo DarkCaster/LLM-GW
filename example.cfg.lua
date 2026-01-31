@@ -2,8 +2,23 @@
 
 -- gateway server options
 server = {
+	-- listen_v4 can be a single string or a table (array) of strings
+	-- Examples:
+	--   Single address: listen_v4 = "127.0.0.1:7777"
+	--   All IPv4 addresses: listen_v4 = "0.0.0.0:7777"
+	--   Two IPv4 addresses: listen_v4 = {"127.0.0.1:7777", "192.168.1.100:7777"}
+	--   Disable IPv4: listen_v4 = "none"
 	listen_v4 = "127.0.0.1:7777", -- ipv4 address to listen on, "none" to not start server listener
-	listen_v6 = "none", -- ipv4 address to listen on, "none" to not start server listener
+
+	-- listen_v6 can be a single string or a table (array) of strings
+	-- Examples:
+	--   Single address: listen_v6 = "[::1]:7777"
+	--   All IPv6 addresses: listen_v6 = "[::]:7777"
+	--   Two IPv6 addresses: listen_v6 = {"[::1]:7777", "[fe80::1]:7777"}
+	--   Disable IPv6: listen_v6 = "none"
+	listen_v6 = "none", -- ipv6 address to listen on, "none" to not start server listener
+
+	-- Default timeouts, you may override it per model or per model-variant
 	health_check_timeout = 5.00, -- required param, must be > 0
 	engine_startup_timeout = 60.0, -- required param, must be > 0
 	engine_idle_timeout = 120.0, -- required param, must be > 0

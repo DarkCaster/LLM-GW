@@ -119,11 +119,43 @@ assert_type(server, "table", "server")
 
 -- Check listen_v4 (mandatory)
 assert_exists(server.listen_v4, "server.listen_v4")
-assert_type(server.listen_v4, "string", "server.listen_v4")
+-- listen_v4 can be either a string or a table (array of strings)
+local listen_v4_type = type(server.listen_v4)
+if listen_v4_type == "string" then
+	-- Single address as string - valid
+elseif listen_v4_type == "table" then
+	-- Multiple addresses as table - validate each element
+	if #server.listen_v4 == 0 then
+		error("Configuration error at 'server.listen_v4': table must contain at least one address")
+	end
+	for i, addr in ipairs(server.listen_v4) do
+		if type(addr) ~= "string" then
+			error(string.format("Configuration error at 'server.listen_v4[%d]': expected string, got %s", i, type(addr)))
+		end
+	end
+else
+	error(string.format("Configuration error at 'server.listen_v4': expected string or table, got %s", listen_v4_type))
+end
 
 -- Check listen_v6 (mandatory)
 assert_exists(server.listen_v6, "server.listen_v6")
-assert_type(server.listen_v6, "string", "server.listen_v6")
+-- listen_v6 can be either a string or a table (array of strings)
+local listen_v6_type = type(server.listen_v6)
+if listen_v6_type == "string" then
+	-- Single address as string - valid
+elseif listen_v6_type == "table" then
+	-- Multiple addresses as table - validate each element
+	if #server.listen_v6 == 0 then
+		error("Configuration error at 'server.listen_v6': table must contain at least one address")
+	end
+	for i, addr in ipairs(server.listen_v6) do
+		if type(addr) ~= "string" then
+			error(string.format("Configuration error at 'server.listen_v6[%d]': expected string, got %s", i, type(addr)))
+		end
+	end
+else
+	error(string.format("Configuration error at 'server.listen_v6': expected string or table, got %s", listen_v6_type))
+end
 
 -- Check health_check_timeout (mandatory)
 assert_positive_number(server.health_check_timeout, "server.health_check_timeout")
