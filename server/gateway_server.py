@@ -41,7 +41,7 @@ class GatewayServer:
         Raises:
             ValueError: If no valid listen addresses are configured
         """
-        self.logger.info("Starting GatewayServer")
+        self.logger.debug("Starting GatewayServer")
 
         # Create aiohttp application
         self.app = aiohttp.web.Application()
@@ -190,7 +190,7 @@ class GatewayServer:
                 await self.stop()
                 raise
 
-        self.logger.info(
+        self.logger.debug(
             f"GatewayServer started successfully on {len(self.sites)} address(es)"
         )
 
