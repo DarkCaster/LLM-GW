@@ -1,6 +1,7 @@
 # server/gateway_server.py
 
 import aiohttp.web
+import aiohttp_cors
 import python_lua_helper
 import logger
 from typing import List, Tuple
@@ -58,19 +59,23 @@ class GatewayServer:
             "/v1/embeddings",
             self.request_handler.handle_request,
         )
-        # Register simple CORS preflight request handlers
-        self.app.router.add_options(
-            "/v1/models",
-            self._handle_cors_preflight,
+
+        # Create CORS configuration
+        cors = aiohttp_cors.setup(
+            self.app,
+            defaults={
+                "*": aiohttp_cors.ResourceOptions(
+                    allow_credentials=True,
+                    expose_headers="*",
+                    allow_headers="*",
+                    allow_methods="*",
+                )
+            },
         )
-        self.app.router.add_options(
-            "/v1/chat/completions",
-            self._handle_cors_preflight,
-        )
-        self.app.router.add_options(
-            "/v1/embeddings",
-            self._handle_cors_preflight,
-        )
+
+        # Configure CORS on all routes.
+        for route in list(self.app.router.routes()):
+            cors.add(route)
         self.logger.info("Routes registered")
 
         # Parse listen addresses from config
@@ -155,21 +160,6 @@ class GatewayServer:
         self.app = None
 
         self.logger.info("GatewayServer stopped")
-
-    def _handle_cors_preflight(
-        self, request: aiohttp.web.Request
-    ) -> aiohttp.web.Response:
-        """
-        Handle CORS preflight requests for any path.
-        """
-        return aiohttp.web.json_response(
-            {"message": "CORS Preflight OK"},
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "*",
-            },
-        )
 
     def _parse_address(self, address: str) -> Tuple[str, int]:
         """
