@@ -90,7 +90,7 @@ class GatewayServer:
                     try:
                         host, port = self._parse_address(listen_v4)
                         listen_addresses.append(("ipv4", host, port))
-                        self.logger.info(f"Will listen on IPv4: {host}:{port}")
+                        self.logger.debug(f"Will listen on IPv4: {host}:{port}")
                     except Exception as e:
                         self.logger.error(
                             f"Failed to parse IPv4 address '{listen_v4}': {e}"
@@ -105,7 +105,7 @@ class GatewayServer:
                 try:
                     host, port = self._parse_address(listen_v4)
                     listen_addresses.append(("ipv4", host, port))
-                    self.logger.info(f"Will listen on IPv4: {host}:{port}")
+                    self.logger.debug(f"Will listen on IPv4: {host}:{port}")
                 except Exception as e:
                     self.logger.error(
                         f"Failed to parse IPv4 address '{listen_v4}': {e}"
@@ -121,7 +121,7 @@ class GatewayServer:
                     try:
                         host, port = self._parse_address(listen_v6)
                         listen_addresses.append(("ipv6", host, port))
-                        self.logger.info(f"Will listen on IPv6: {host}:{port}")
+                        self.logger.debug(f"Will listen on IPv6: {host}:{port}")
                     except Exception as e:
                         self.logger.error(
                             f"Failed to parse IPv6 address '{listen_v6}': {e}"
@@ -136,7 +136,7 @@ class GatewayServer:
                 try:
                     host, port = self._parse_address(listen_v6)
                     listen_addresses.append(("ipv6", host, port))
-                    self.logger.info(f"Will listen on IPv6: {host}:{port}")
+                    self.logger.debug(f"Will listen on IPv6: {host}:{port}")
                 except Exception as e:
                     self.logger.error(
                         f"Failed to parse IPv6 address '{listen_v6}': {e}"
@@ -162,6 +162,26 @@ class GatewayServer:
                 self.sites.append(site)
 
                 self.logger.info(f"Server listening on {addr_type} {host}:{port}")
+
+                # Log OpenAI endpoint hint
+                if addr_type == "ipv4":
+                    if host == "0.0.0.0":
+                        # Any-mask address for IPv4
+                        endpoint_hint = f"http://[server-address]:{port}/v1"
+                        self.logger.info(f"OpenAI endpoint: {endpoint_hint}")
+                    else:
+                        # Specific IPv4 address
+                        endpoint_hint = f"http://{host}:{port}/v1"
+                        self.logger.info(f"OpenAI endpoint: {endpoint_hint}")
+                elif addr_type == "ipv6":
+                    if host == "::":
+                        # Any-mask address for IPv6
+                        endpoint_hint = f"http://[server-address]:{port}/v1"
+                        self.logger.info(f"OpenAI endpoint: {endpoint_hint}")
+                    else:
+                        # Specific IPv6 address
+                        endpoint_hint = f"http://[{host}]:{port}/v1"
+                        self.logger.info(f"OpenAI endpoint: {endpoint_hint}")
             except Exception as e:
                 self.logger.error(
                     f"Failed to start server on {addr_type} {host}:{port}: {e}"
