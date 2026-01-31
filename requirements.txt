@@ -1,2 +1,3 @@
 python-lua-helper # parse configuration in LUA format and provide a class for read-only access to it
 aiohttp # HTTP server and client
+aiohttp_cors # CORS preflight support for aiohttp
