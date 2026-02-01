@@ -2,10 +2,12 @@
 
 import asyncio
 import sys
+import json
 import aiohttp.web
 import python_lua_helper
 import logger
 from .idle_watchdog import IdleWatchdog
+from .dump_writer import DumpWriter
 from engine import EngineClient
 from engine import EngineManager
 from models import ModelSelector
@@ -28,7 +30,10 @@ class RequestHandler:
 
         Args:
             model_selector: ModelSelector instance for selecting model variants
+            engine_manager: EngineManager instance for managing engine lifecycle
+            idle_watchdog: IdleWatchdog instance for monitoring idle timeouts
             cfg: PyLuaHelper configuration object
+            dumps_dir: Optional directory path for dumping requests/responses
         """
         self._model_selector = model_selector
         self._engine_manager = engine_manager
@@ -44,6 +49,24 @@ class RequestHandler:
         self._disconnect_event = None
         # logger
         self.logger = logger.get_logger(self.__class__.__name__)
+
+    def _extract_model_name_from_text(self, request_text: str) -> str:
+        """
+        Attempt to extract model name from request text.
+
+        Args:
+            request_text: Raw request text
+
+        Returns:
+            Model name if found, otherwise "unknown"
+        """
+        try:
+            data = json.loads(request_text)
+            if isinstance(data, dict) and "model" in data:
+                return str(data["model"])
+        except Exception:
+            pass
+        return "unknown"
 
     def _is_client_connected(self, request: aiohttp.web.Request) -> bool:
         """
@@ -190,26 +213,35 @@ class RequestHandler:
             if self._is_stopped or self._is_disposed:
                 return self._return_error("RequestHandler is shuting down", 500)
             self._idle_watchdog.disarm()
+            # Initialize dump writer if dumps_dir is configured
+            dump_writer = None
+            request_text = None
             try:
-                # Debug: write json for inspection
-                # try:
-                #     text = await request.text()
-                #     with open("request.dump.txt", "w", encoding="utf-8") as f:
-                #         f.write(text)
-                #     self.logger.info(
-                #         f"Wrote request dump ({len(text)} chars) to request.dump.txt"
-                #     )
-                # except Exception as e:
-                #    self.logger.warning(f"Failed to write debug dump file: {e}")
-                # Parse JSON body
+                # Read raw request text
                 try:
-                    request_data = await request.json()
+                    request_text = await request.text()
+                except Exception as e:
+                    self.logger.error(f"Failed to read request text: {e}")
+                    return self._return_error("Failed to read request body", 400, e)
+                # Extract model name and create dump writer if configured
+                if self._cfg.get("server.dumps_dir") is not None:
+                    model_name = self._extract_model_name_from_text(request_text)
+                    dump_writer = DumpWriter(self._cfg.get("server.dumps_dir") , model_name)
+                    dump_writer.write_request(request_text)
+                # Parse JSON from the already-read text
+                try:
+                    request_data = json.loads(request_text)
                 except Exception as e:
                     self.logger.error(f"Failed to parse JSON body: {e}")
+                    if dump_writer:
+                        dump_writer.write_error(e)
                     return self._return_error("Invalid JSON in request body", 400, e)
                 # Validate required fields
                 if "model" not in request_data:
                     self.logger.error("Missing 'model' field in request")
+                    error = ValueError("Missing required field: 'model'")
+                    if dump_writer:
+                        dump_writer.write_error(error)
                     return self._return_error("Missing required field: 'model'", 400)
                 # Extract model name
                 model_name = request_data["model"]
@@ -226,8 +258,12 @@ class RequestHandler:
                         path, model_name, request_data
                     )
                 except ValueError as e:
+                    if dump_writer:
+                        dump_writer.write_error(e)
                     return self._return_error("Model selection failed", 400, e)
                 except Exception as e:
+                    if dump_writer:
+                        dump_writer.write_error(e)
                     return self._return_error(
                         "Unexpected error during model selection", 500, e
                     )
@@ -242,8 +278,12 @@ class RequestHandler:
                     )
                     self.logger.debug("Engine response received")
                 except ValueError as e:
+                    if dump_writer:
+                        dump_writer.write_error(e)
                     return self._return_error("Request forwarding failed", 400, e)
                 except Exception as e:
+                    if dump_writer:
+                        dump_writer.write_error(e)
                     return self._return_error("Engine communication error", 502, e)
                 # Process the engine response
                 try:
@@ -253,6 +293,9 @@ class RequestHandler:
                     ):
                         # Streaming response
                         self.logger.debug("Returning streaming response")
+                        # Write response header to dump if dumping is enabled
+                        if dump_writer:
+                            dump_writer.write_response_start()
                         response = aiohttp.web.StreamResponse(
                             status=engine_response.status,
                             headers={"Content-Type": content_type},
@@ -264,6 +307,9 @@ class RequestHandler:
                             async for chunk in engine_response.content.iter_any():
                                 try:
                                     await response.write(chunk)
+                                    # Write chunk to dump file
+                                    if dump_writer:
+                                        dump_writer.write_response_chunk(chunk)
                                 except (ConnectionResetError, BrokenPipeError) as e:
                                     self.logger.info(
                                         f"Client connection error during streaming: {e}"
@@ -278,6 +324,9 @@ class RequestHandler:
                                     break
                             if write_ok:
                                 await response.write_eof()
+                            # Write response footer to dump if dumping is enabled
+                            if dump_writer:
+                                dump_writer.write_response_end()
                         except asyncio.CancelledError:
                             self.logger.info(
                                 "Streaming response cancelled (client disconnect)"
@@ -288,6 +337,15 @@ class RequestHandler:
                         # Non-streaming response
                         self.logger.debug("Returning non-streaming response")
                         body = await engine_response.read()
+                        # Write response to dump if dumping is enabled
+                        if dump_writer:
+                            try:
+                                response_text = body.decode("utf-8", errors="replace")
+                                dump_writer.write_response(response_text)
+                            except Exception as e:
+                                self.logger.error(
+                                    f"Failed to write response to dump: {e}"
+                                )
                         return aiohttp.web.Response(
                             body=body,
                             status=engine_response.status,
@@ -301,8 +359,13 @@ class RequestHandler:
                 # Re-raise to properly propagate cancellation
                 raise
             except Exception as e:
+                if dump_writer:
+                    dump_writer.write_error(e)
                 return self._return_error("Internal server error", 500, e)
             finally:
+                # Close dump writer if it was created
+                if dump_writer:
+                    dump_writer.close()
                 await self._stop_monitoring_task()
                 self._idle_watchdog.rearm(self._idle_timeout, self.handle_idle_timeout)
                 self.logger.debug("Releasing request lock")
