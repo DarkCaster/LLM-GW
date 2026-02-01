@@ -140,6 +140,11 @@ assert_positive_number(server.engine_startup_timeout, "server.engine_startup_tim
 -- Check engine_idle_timeout (mandatory)
 assert_positive_number(server.engine_idle_timeout, "server.engine_idle_timeout")
 
+-- Check dumps_dir (optional)
+if server.dumps_dir ~= nil then
+	assert_type(server.dumps_dir, "string", "server.dumps_dir")
+end
+
 -- Check models configuration
 assert_exists(models, "models")
 assert_type(models, "table", "models")

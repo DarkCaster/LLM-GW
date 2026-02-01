@@ -22,6 +22,9 @@ server = {
 	health_check_timeout = 5.00, -- required param, must be > 0
 	engine_startup_timeout = 60.0, -- required param, must be > 0
 	engine_idle_timeout = 120.0, -- required param, must be > 0
+
+	-- Debug, optional, uncomment to enable
+	-- dumps_dir = "dumps" -- dump incoming requests and answers and place it to logfiles inside this directory
 }
 
 -- NOTE: there are 2 helper functions available to help with tables and arrays (args)
