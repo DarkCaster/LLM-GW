@@ -81,26 +81,9 @@ class GatewayServer:
         # Parse listen addresses from config
         listen_addresses = []
 
-        # Check IPv4 address(es)
-        if self.cfg.is_table("server.listen_v4"):
-            # Multiple IPv4 addresses
-            for i in self.cfg.get_table_seq("server.listen_v4"):
-                listen_v4 = self.cfg.get(f"server.listen_v4.{i}")
-                if listen_v4 != "none":
-                    try:
-                        host, port = self._parse_address(listen_v4)
-                        listen_addresses.append(("ipv4", host, port))
-                        self.logger.debug(f"Will listen on IPv4: {host}:{port}")
-                    except Exception as e:
-                        self.logger.error(
-                            f"Failed to parse IPv4 address '{listen_v4}': {e}"
-                        )
-                        raise ValueError(
-                            f"Invalid IPv4 listen address: {listen_v4}"
-                        ) from e
-        else:
-            # Single IPv4 address
-            listen_v4 = self.cfg.get("server.listen_v4", "none")
+        # IPv4 addresses
+        for i in self.cfg.get_table_seq("server.listen_v4"):
+            listen_v4 = self.cfg.get(f"server.listen_v4.{i}")
             if listen_v4 != "none":
                 try:
                     host, port = self._parse_address(listen_v4)
@@ -112,26 +95,9 @@ class GatewayServer:
                     )
                     raise ValueError(f"Invalid IPv4 listen address: {listen_v4}") from e
 
-        # Check IPv6 address(es)
-        if self.cfg.is_table("server.listen_v6"):
-            # Multiple IPv6 addresses
-            for i in self.cfg.get_table_seq("server.listen_v6"):
-                listen_v6 = self.cfg.get(f"server.listen_v6.{i}")
-                if listen_v6 != "none":
-                    try:
-                        host, port = self._parse_address(listen_v6)
-                        listen_addresses.append(("ipv6", host, port))
-                        self.logger.debug(f"Will listen on IPv6: {host}:{port}")
-                    except Exception as e:
-                        self.logger.error(
-                            f"Failed to parse IPv6 address '{listen_v6}': {e}"
-                        )
-                        raise ValueError(
-                            f"Invalid IPv6 listen address: {listen_v6}"
-                        ) from e
-        else:
-            # Single IPv6 address
-            listen_v6 = self.cfg.get("server.listen_v6", "none")
+        # IPv6 addresses
+        for i in self.cfg.get_table_seq("server.listen_v6"):
+            listen_v6 = self.cfg.get(f"server.listen_v6.{i}")
             if listen_v6 != "none":
                 try:
                     host, port = self._parse_address(listen_v6)
