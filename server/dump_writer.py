@@ -24,10 +24,16 @@ class DumpWriter:
         self._file = None
         self._filepath = None
         self._is_closed = False
-
+        # Create dumps directory if missing
+        try:
+            os.makedirs(self._dumps_dir, exist_ok=True)
+            self.logger.debug(f"Ensured dumps directory exists: {self._dumps_dir}")
+        except Exception as e:
+            self.logger.error(
+                f"Failed to create dumps directory {self._dumps_dir}: {e}"
+            )
         # Generate filename with timestamp
         self._filepath = self._generate_filename()
-
         # Open file for writing
         try:
             self._file = open(self._filepath, "w", encoding="utf-8")
@@ -59,7 +65,6 @@ class DumpWriter:
         """
         if self._file is None or self._is_closed:
             return
-
         try:
             separator = "=" * 80
             self._file.write(f"{separator}\n")
@@ -83,7 +88,6 @@ class DumpWriter:
         """
         if self._file is None or self._is_closed:
             return
-
         try:
             separator = "=" * 80
             self._file.write(f"{separator}\n")
@@ -109,7 +113,6 @@ class DumpWriter:
         """
         if self._file is None or self._is_closed:
             return
-
         try:
             # Decode chunk and write it
             chunk_text = chunk.decode("utf-8", errors="replace")
@@ -124,7 +127,6 @@ class DumpWriter:
         """
         if self._file is None or self._is_closed:
             return
-
         try:
             separator = "=" * 80
             self._file.write(f"{separator}\n")
@@ -141,7 +143,6 @@ class DumpWriter:
         """
         if self._file is None or self._is_closed:
             return
-
         try:
             separator = "=" * 80
             self._file.write(f"\n{separator}\n\n")
@@ -159,7 +160,6 @@ class DumpWriter:
         """
         if self._file is None or self._is_closed:
             return
-
         try:
             import traceback
 
