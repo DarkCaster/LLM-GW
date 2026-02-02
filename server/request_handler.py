@@ -354,11 +354,26 @@ class RequestHandler:
                         if dump_writer:
                             try:
                                 response_text = body.decode("utf-8", errors="replace")
-                                dump_writer.write_response(response_text)
                             except Exception as e:
                                 self.logger.error(
-                                    f"Failed to write response to dump: {e}"
+                                    f"Failed to decode response for dump: {e}"
                                 )
+                                dump_writer.write_error(e)
+                                response_text = None
+                            try:
+                                if response_text is not None:
+                                    # Write JSON response to dump with human readable indentation (reserialize it)
+                                    response_json = json.loads(response_text)
+                                    formatted_response = json.dumps(response_json, indent=2, ensure_ascii=False)
+                                    dump_writer.write_response(formatted_response)
+                            except Exception as e:
+                                self.logger.error(
+                                    f"Failed to write formatted response to dump: {e}"
+                                )
+                                dump_writer.write_error(e)
+                                if response_text is not None:
+                                    dump_writer.write_response(response_text)
+                        # Return response to the client
                         return aiohttp.web.Response(
                             body=body,
                             status=engine_response.status,
