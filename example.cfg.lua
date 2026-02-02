@@ -46,7 +46,8 @@ example_model = {
 		binary = "/path/to/the/llama-tokenize/binary",
 		-- base_args = { "--log-disable", "--stdin", "--ids" }, -- optional, only enable to override internal args
 		extra_args = { "-m", "/path/to/model.gguf/file" }, -- extra arguments needed for llama-tokenize to work, use to pass model name
-		extra_tokens_per_message = 8, -- add extra 10 tokens per each message to compensate chat-template absense
+		extra_tokens_per_message = 8, -- add extra tokens per each message to compensate chat-template overhead
+		extra_tokens = 0, -- add this number to the token count result, to compensate embedded system prompt if present
 	},
 	variants = {
 		{
@@ -135,7 +136,7 @@ qwen3_30b_instruct_model = {
 	engine = presets.engines.llamacpp,
 	name = "qwen3-30b-instruct",
 	connect = llama_url,
-	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_30b_instruct_gguf }, extra_tokens_per_message = 8 },
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_30b_instruct_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
 	variants = {
 		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_30b_instruct_gguf,10000,2048,2048), context = 10000 },
 		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_30b_instruct_gguf,20000,2048,2048), context = 20000 },
@@ -155,7 +156,7 @@ qwen3_next_80b_instruct_model = {
 	engine = presets.engines.llamacpp,
 	name = "qwen3-next-80b-instruct",
 	connect = llama_url,
-	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_next_80b_instruct_gguf }, extra_tokens_per_message = 8 },
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_next_80b_instruct_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
 	variants = {
 		{ binary = llama_bin, args = get_qwen3moe_next_instr_args(qwen3_next_80b_instruct_gguf,10240,1024,2048), context = 10240 },
 		{ binary = llama_bin, args = get_qwen3moe_next_instr_args(qwen3_next_80b_instruct_gguf,20480,1024,2048), context = 20480 },
@@ -177,7 +178,7 @@ qwen3_30b_thinking_model = {
 	engine = presets.engines.llamacpp,
 	name = "qwen3-30b-thinking",
 	connect = llama_url,
-	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_30b_thinking_gguf }, extra_tokens_per_message = 8 },
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_30b_thinking_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
 	variants = {
 		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_30b_thinking_gguf,10000,2048,2048), context = 10000 },
 		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_30b_thinking_gguf,20000,2048,2048), context = 20000 },
@@ -197,7 +198,7 @@ qwen3_next_80b_thinking_model = {
 	engine = presets.engines.llamacpp,
 	name = "qwen3-next-80b-thinking",
 	connect = llama_url,
-	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_next_80b_thinking_gguf }, extra_tokens_per_message = 8 },
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_next_80b_thinking_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
 	variants = {
 		{ binary = llama_bin, args = get_qwen3moe_next_think_args(qwen3_next_80b_thinking_gguf,10240,1024,2048), context = 10240 },
 		{ binary = llama_bin, args = get_qwen3moe_next_think_args(qwen3_next_80b_thinking_gguf,20480,1024,2048), context = 20480 },
@@ -219,7 +220,7 @@ qwen3_30b_coder_model = {
 	engine = presets.engines.llamacpp,
 	name = "qwen3-30b-coder",
 	connect = llama_url,
-	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_30b_coder_gguf }, extra_tokens_per_message = 8 },
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_30b_coder_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
 	variants = {
 		{ binary = llama_bin, args = get_qwen3moe_coder_args(qwen3_30b_coder_gguf,10000,2048,2048), context = 10000 },
 		{ binary = llama_bin, args = get_qwen3moe_coder_args(qwen3_30b_coder_gguf,20000,2048,2048), context = 20000 },
@@ -242,7 +243,7 @@ glm_47_flash_model = {
 	engine = presets.engines.llamacpp,
 	name = "glm-47-flash",
 	connect = llama_url,
-	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", glm_47_flash_gguf }, extra_tokens_per_message = 8 },
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", glm_47_flash_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
 	variants = {
 		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,10000,2048,2048), context = 10000 },
 		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,20000,2048,2048), context = 20000 },
@@ -262,7 +263,7 @@ glm_47_flash_nothinking_model = {
 	engine = presets.engines.llamacpp,
 	name = "glm-47-flash-nothinking",
 	connect = llama_url,
-	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", glm_47_flash_gguf }, extra_tokens_per_message = 8 },
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", glm_47_flash_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
 	variants = {
 		{ binary = llama_bin, args = get_glm_nothinking_args(glm_47_flash_gguf,10000,2048,2048), context = 10000 },
 		{ binary = llama_bin, args = get_glm_nothinking_args(glm_47_flash_gguf,20000,2048,2048), context = 20000 },
