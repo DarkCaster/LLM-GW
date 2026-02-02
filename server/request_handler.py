@@ -222,29 +222,42 @@ class RequestHandler:
                     request_text = await request.text()
                 except Exception as e:
                     self.logger.error(f"Failed to read request text: {e}")
+                    if self._cfg.get("server.dumps_dir") is not None:
+                        dump_writer = DumpWriter(self._cfg.get("server.dumps_dir"), "request_read_error")
+                        dump_writer.write_error(e)
                     return self._return_error("Failed to read request body", 400, e)
-                # Extract model name and create dump writer if configured
-                if self._cfg.get("server.dumps_dir") is not None:
-                    model_name = self._extract_model_name_from_text(request_text)
-                    dump_writer = DumpWriter(self._cfg.get("server.dumps_dir") , model_name)
-                    dump_writer.write_request(request_text)
                 # Parse JSON from the already-read text
                 try:
                     request_data = json.loads(request_text)
                 except Exception as e:
                     self.logger.error(f"Failed to parse JSON body: {e}")
-                    if dump_writer:
+                    if self._cfg.get("server.dumps_dir") is not None:
+                        dump_writer = DumpWriter(self._cfg.get("server.dumps_dir"), "request_parse_error")
+                        dump_writer.write_request(request_text)
                         dump_writer.write_error(e)
                     return self._return_error("Invalid JSON in request body", 400, e)
-                # Validate required fields
+                # Now we have a request_data, parse model name from it
                 if "model" not in request_data:
                     self.logger.error("Missing 'model' field in request")
-                    error = ValueError("Missing required field: 'model'")
-                    if dump_writer:
-                        dump_writer.write_error(error)
+                    if self._cfg.get("server.dumps_dir") is not None:
+                        dump_writer = DumpWriter(self._cfg.get("server.dumps_dir"), "model_missing_error")
+                        dump_writer.write_request(request_text)
+                        dump_writer.write_error(ValueError("Missing required field: 'model'"))
                     return self._return_error("Missing required field: 'model'", 400)
                 # Extract model name
                 model_name = request_data["model"]
+                # Now create proper dump_writer with parsed model name
+                if self._cfg.get("server.dumps_dir") is not None:
+                    dump_writer = DumpWriter(self._cfg.get("server.dumps_dir"), model_name)
+                    # Write JSON request with human readable indentation (reserialize it)
+                    try:
+                        formatted_request = json.dumps(request_data, indent=2, ensure_ascii=False)
+                        dump_writer.write_request(formatted_request)
+                    except Exception as e:
+                        self.logger.error(f"Failed to write formatted request to dump: {e}")
+                        # Fallback to raw request text if formatting fails
+                        dump_writer.write_request(request_text)
+                # Handle request
                 self.logger.info(f"Handling request for model '{model_name}'")
                 # Extract endpoint
                 path = request.path
