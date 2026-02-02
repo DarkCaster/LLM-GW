@@ -9,6 +9,7 @@ import engine
 import models
 import server
 import logger
+from server.dump_writer import clear_dumps_directory
 
 
 async def async_main(cfg: python_lua_helper.PyLuaHelper) -> None:
@@ -72,6 +73,14 @@ def main() -> None:
     except Exception as e:
         log.error(f"Failed to load configuration: {e}")
         sys.exit(1)
+
+    # Clear dump files on startup if configured
+    dumps_dir = cfg.get("server.dumps_dir")
+    clear_dumps = cfg.get_bool("server.clear_dumps_on_start", False)
+
+    if dumps_dir and clear_dumps:
+        log.info(f"Clearing dump files from directory: {dumps_dir}")
+        clear_dumps_directory(dumps_dir)
 
     def temp_cleanup():
         if cfg.get_bool("profile.temp_cleanup", True):

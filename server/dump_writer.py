@@ -4,6 +4,40 @@ from typing import Optional
 from logger import get_logger
 
 
+def clear_dumps_directory(dumps_dir: str) -> None:
+    """
+    Clear all dump files from the specified directory.
+
+    Args:
+        dumps_dir: Directory containing dump files to remove
+    """
+    logger = get_logger("DumpWriter.clear")
+    # Check if directory exists
+    if not os.path.exists(dumps_dir):
+        logger.info(f"Dumps directory does not exist: {dumps_dir}")
+        return
+    if not os.path.isdir(dumps_dir):
+        logger.warning(f"Dumps path is not a directory: {dumps_dir}")
+        return
+    logger.info(f"Clearing dump files from directory: {dumps_dir}")
+    try:
+        # Scan directory for dump files
+        for filename in os.listdir(dumps_dir):
+            # Match dump file pattern (*.dump.txt)
+            if filename.endswith(".dump.txt"):
+                filepath = os.path.join(dumps_dir, filename)
+                try:
+                    # Check if it's a file (not a directory)
+                    if os.path.isfile(filepath):
+                        os.remove(filepath)
+                        logger.info(f"Removed dump file: {filename}")
+                except Exception as e:
+                    logger.error(f"Failed to remove dump file {filename}: {e}")
+    except Exception as e:
+        logger.error(f"Failed to scan dumps directory {dumps_dir}: {e}")
+        return
+
+
 class DumpWriter:
     """
     Utility class for writing request/response dumps to files.
