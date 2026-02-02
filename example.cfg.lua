@@ -25,6 +25,7 @@ server = {
 
 	-- Debug, optional, uncomment to enable
 	-- dumps_dir = "dumps" -- dump incoming requests and answers and place it to logfiles inside this directory
+	-- clear_dumps_on_start = false -- on startup, remove old dump-files from dumps_dir
 }
 
 -- NOTE: there are 2 helper functions available to help with tables and arrays (args)

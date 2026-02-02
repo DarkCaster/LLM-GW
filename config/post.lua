@@ -145,6 +145,12 @@ if server.dumps_dir ~= nil then
 	assert_type(server.dumps_dir, "string", "server.dumps_dir")
 end
 
+if server.clear_dumps_on_start ~= nil then
+	assert_type(server.clear_dumps_on_start, "boolean", "server.clear_dumps_on_start")
+else
+	server.clear_dumps_on_start = false
+end
+
 -- Check models configuration
 assert_exists(models, "models")
 assert_type(models, "table", "models")
