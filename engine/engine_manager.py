@@ -156,6 +156,7 @@ class EngineManager:
                 self.cfg.get_int(
                     f"models.{model_index}.tokenization.extra_tokens_per_message"
                 ),
+                self.cfg.get_int(f"models.{model_index}.tokenization.extra_tokens"),
                 self.cfg.get(f"models.{model_index}.tokenization.binary"),
                 self.cfg.get_list(f"models.{model_index}.tokenization.final_args"),
             )

@@ -7,9 +7,16 @@ from .utils import parse_openai_request_content
 
 
 class LlamaStandaloneTokenizer(StandaloneTokenizer):
-    def __init__(self, add_tokens_per_message: int, binary_path: str, args: List[str]):
+    def __init__(
+        self,
+        add_tokens_per_message: int,
+        add_tokens: int,
+        binary_path: str,
+        args: List[str],
+    ):
         super().__init__()
         self._add_tokens_per_message = add_tokens_per_message
+        self._add_tokens = add_tokens
         self._binary_path = binary_path
         self._args = args
         self.logger.debug(
@@ -41,9 +48,7 @@ class LlamaStandaloneTokenizer(StandaloneTokenizer):
                 cwd=workdir,
             )
             # Send content prompt to stdin and wait for process to complete
-            stdout, stderr = await process.communicate(
-                input=prompt.encode("utf-8")
-            )
+            stdout, stderr = await process.communicate(input=prompt.encode("utf-8"))
             # Log stderr if present
             if stderr:
                 stderr_str = stderr.decode("utf-8", errors="replace").strip()
@@ -84,9 +89,10 @@ class LlamaStandaloneTokenizer(StandaloneTokenizer):
             return max_tokens
         total_tokens = token_count + max_tokens
         total_tokens += message_count * self._add_tokens_per_message
+        total_tokens += self._add_tokens
         self.logger.debug(
             f"Token estimation: prompt={token_count}, max_tokens={max_tokens}, "
-            f"message_count={message_count}, extra_per_message={self._add_tokens_per_message}, "
+            f"message_count={message_count}, extra_per_message={self._add_tokens_per_message}, extra={self._add_tokens},"
             f"total={total_tokens}"
         )
         return total_tokens
