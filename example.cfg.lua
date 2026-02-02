@@ -231,6 +231,31 @@ qwen3_30b_coder_model = {
 	},
 }
 
+-- https://huggingface.co/bartowski/mistralai_Ministral-3-3B-Instruct-2512-GGUF
+ministral_3_3b_instruct_gguf = [[C:\Mistral\mistralai_Ministral-3-3B-Instruct-2512-Q4_K_L.gguf]]
+
+function get_ministral_3_instr_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	return concat_arrays(args, {"--jinja", "--temp", "0.1"})
+end
+
+ministral_3_3b_instruct_model = {
+	engine = presets.engines.llamacpp,
+	name = "ministral-3-3b-instruct",
+	connect = llama_url,
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", ministral_3_3b_instruct_gguf }, extra_tokens_per_message = 8, extra_tokens = 550 },
+	variants = {
+		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,10240,4096,4096), context = 10240 },
+		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,20480,2048,2048), context = 20480 },
+		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,30720,1024,2048), context = 30720 },
+		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,40960,1024,2048), context = 40960 },
+		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,61440,1024,2048,"q8_0","q8_0"), context = 61440 },
+		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,81920,512,2048,"q8_0","q8_0"), context = 81920 },
+		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,102400,512,2048,"q8_0","q8_0"), context = 102400 },
+		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,122880,512,2048,"q8_0","q8_0"), context = 122880 },
+	},
+}
+
 -- https://huggingface.co/unsloth/GLM-4.7-Flash-GGUF/tree/main
 glm_47_flash_gguf = [[C:\GLM\GLM-4.7-Flash-UD-Q4_K_XL.gguf]]
 
@@ -298,5 +323,6 @@ models = {
 	qwen3_30b_coder_model,
 	glm_47_flash_model,
 	glm_47_flash_nothinking_model,
+	ministral_3_3b_instruct_model,
 	snowflake_arctic_embed_model,
 }
