@@ -124,6 +124,7 @@ qwen3_30b_thinking_gguf = [[C:\Qwen\Qwen3-30B-A3B-Thinking-2507-UD-Q3_K_XL.gguf]
 qwen3_30b_coder_gguf = [[C:\Qwen\Qwen3-Coder-30B-A3B-Instruct-UD-Q3_K_XL.gguf]]
 qwen3_next_80b_instruct_gguf = [[C:\Qwen\Qwen3-Next-80B-A3B-Instruct-UD-IQ2_XXS.gguf]]
 qwen3_next_80b_thinking_gguf = [[C:\Qwen\Qwen3-Next-80B-A3B-Thinking-UD-IQ2_XXS.gguf]]
+qwen3_next_coder_gguf = [[C:\Qwen\Qwen3-Coder-Next-UD-IQ2_XXS.gguf]]
 
 function get_qwen3moe_instr_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
@@ -166,6 +167,28 @@ qwen3_next_80b_instruct_model = {
 		{ binary = llama_bin, args = get_qwen3moe_next_instr_args(qwen3_next_80b_instruct_gguf,81920,1024,2048), context = 81920 },
 		{ binary = llama_bin, args = get_qwen3moe_next_instr_args(qwen3_next_80b_instruct_gguf,102400,1024,2048), context = 102400 },
 		{ binary = llama_bin, args = get_qwen3moe_next_instr_args(qwen3_next_80b_instruct_gguf,122880,1024,2048), context = 122880 },
+	},
+}
+
+function get_qwen3moe_next_coder_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	return concat_arrays(args, {"--temp", "1.0", "--top-p", "0.95", "--min-p", "0.01", "--top-k", "40", "--jinja"})
+end
+
+qwen3_next_coder_model = {
+	engine = presets.engines.llamacpp,
+	name = "qwen3-next-coder",
+	connect = llama_url,
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_next_coder_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
+	variants = {
+		{ binary = llama_bin, args = get_qwen3moe_next_coder_args(qwen3_next_coder_gguf,10240,1024,2048), context = 10240 },
+		{ binary = llama_bin, args = get_qwen3moe_next_coder_args(qwen3_next_coder_gguf,20480,1024,2048), context = 20480 },
+		{ binary = llama_bin, args = get_qwen3moe_next_coder_args(qwen3_next_coder_gguf,30720,1024,2048), context = 30720 },
+		{ binary = llama_bin, args = get_qwen3moe_next_coder_args(qwen3_next_coder_gguf,40960,1024,2048), context = 40960 },
+		{ binary = llama_bin, args = get_qwen3moe_next_coder_args(qwen3_next_coder_gguf,61440,1024,2048), context = 61440 },
+		{ binary = llama_bin, args = get_qwen3moe_next_coder_args(qwen3_next_coder_gguf,81920,1024,2048), context = 81920 },
+		{ binary = llama_bin, args = get_qwen3moe_next_coder_args(qwen3_next_coder_gguf,102400,1024,2048), context = 102400 },
+		{ binary = llama_bin, args = get_qwen3moe_next_coder_args(qwen3_next_coder_gguf,122880,1024,2048), context = 122880 },
 	},
 }
 
@@ -256,12 +279,21 @@ ministral_3_3b_instruct_model = {
 	},
 }
 
--- https://huggingface.co/unsloth/GLM-4.7-Flash-GGUF/tree/main
-glm_47_flash_gguf = [[C:\GLM\GLM-4.7-Flash-UD-Q4_K_XL.gguf]]
+-- https://huggingface.co/unsloth/GLM-4.7-Flash-GGUF
+-- https://huggingface.co/noctrex/GLM-4.7-Flash-MXFP4_MOE-GGUF
+glm_47_flash_gguf = [[C:\Sync\ML\LLM\GLM\GLM-4.7-Flash-UD-Q5_K_XL.gguf]] -- heavier quant, seem to be a bit overkill for my tasks
+glm_47_flash_mxfp4_gguf = [[C:\Sync\ML\LLM\GLM\GLM-4.7-Flash-MXFP4_MOE.gguf]]  -- small fast static quant, seem to work better with non-english texts for me than other 4bit quants with imatrix
 
+-- "--temp", "0.7", "--top-p", "1.0", -- for tool calling
+-- "--temp", "1.0", "--top-p", "0.95", -- for general use-case
 function get_glm_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	return concat_arrays(args, {"--jinja", "--temp", "0.7", "--top-p", "0.95", "--min-p", "0.05", "--repeat-penalty", "1.0"})
+	return concat_arrays(args, {"--spec-type", "ngram-map-k", "--spec-ngram-size-n", "8", "--spec-ngram-size-m", "8", "--spec-ngram-min-hits", "2", "--jinja", "--temp", "0.7", "--repeat-penalty", "1.0"})
+end
+
+function get_glm_instruct_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	local args = get_glm_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	return concat_arrays(args, {"--chat-template-kwargs", [[{"enable_thinking":false}]]})
 end
 
 glm_47_flash_model = {
@@ -270,32 +302,65 @@ glm_47_flash_model = {
 	connect = llama_url,
 	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", glm_47_flash_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
 	variants = {
-		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,10000,2048,2048), context = 10000 },
-		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,20000,2048,2048), context = 20000 },
-		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,30000,2048,2048), context = 30000 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,10240,2048,2048), context = 10240 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,20480,2048,2048), context = 20480 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,30720,2048,2048), context = 30720 },
 		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,40960,2048,2048), context = 40960 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,61440,2048,2048), context = 61440 },
 		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,81920,2048,2048,"q8_0","q8_0"), context = 81920 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,102400,2048,2048,"q8_0","q8_0"), context = 102400 },
 		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,122880,2048,2048,"q8_0","q8_0"), context = 122880 },
 	},
 }
 
-function get_glm_nothinking_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	local args = get_glm_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	return concat_arrays(args, {"--chat-template-kwargs", [[{"enable_thinking":false}]]})
-end
-
-glm_47_flash_nothinking_model = {
+glm_47_flash_instruct_model = {
 	engine = presets.engines.llamacpp,
-	name = "glm-47-flash-nothinking",
+	name = "glm-47-flash-instruct",
 	connect = llama_url,
 	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", glm_47_flash_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
 	variants = {
-		{ binary = llama_bin, args = get_glm_nothinking_args(glm_47_flash_gguf,10000,2048,2048), context = 10000 },
-		{ binary = llama_bin, args = get_glm_nothinking_args(glm_47_flash_gguf,20000,2048,2048), context = 20000 },
-		{ binary = llama_bin, args = get_glm_nothinking_args(glm_47_flash_gguf,30000,2048,2048), context = 30000 },
-		{ binary = llama_bin, args = get_glm_nothinking_args(glm_47_flash_gguf,40960,2048,2048), context = 40960 },
-		{ binary = llama_bin, args = get_glm_nothinking_args(glm_47_flash_gguf,81920,2048,2048,"q8_0","q8_0"), context = 81920 },
-		{ binary = llama_bin, args = get_glm_nothinking_args(glm_47_flash_gguf,122880,2048,2048,"q8_0","q8_0"), context = 122880 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_gguf,10240,2048,2048), context = 10240 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_gguf,20480,2048,2048), context = 20480 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_gguf,30720,2048,2048), context = 30720 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_gguf,40960,2048,2048), context = 40960 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_gguf,61440,2048,2048), context = 61440 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_gguf,81920,2048,2048,"q8_0","q8_0"), context = 81920 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_gguf,102400,2048,2048,"q8_0","q8_0"), context = 102400 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_gguf,122880,2048,2048,"q8_0","q8_0"), context = 122880 },
+	},
+}
+
+glm_47_flash_mxfp4_model = {
+	engine = presets.engines.llamacpp,
+	name = "glm-47-flash-mxfp4",
+	connect = llama_url,
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", glm_47_flash_mxfp4_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
+	variants = {
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_mxfp4_gguf,10240,2048,2048), context = 10240 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_mxfp4_gguf,20480,2048,2048), context = 20480 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_mxfp4_gguf,30720,2048,2048), context = 30720 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_mxfp4_gguf,40960,2048,2048), context = 40960 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_mxfp4_gguf,61440,2048,2048), context = 61440 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_mxfp4_gguf,81920,2048,2048,"q8_0","q8_0"), context = 81920 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_mxfp4_gguf,102400,2048,2048,"q8_0","q8_0"), context = 102400 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_mxfp4_gguf,122880,2048,2048,"q8_0","q8_0"), context = 122880 },
+	},
+}
+
+glm_47_flash_mxfp4_instruct_model = {
+	engine = presets.engines.llamacpp,
+	name = "glm-47-flash-mxfp4-instruct",
+	connect = llama_url,
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", glm_47_flash_mxfp4_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
+	variants = {
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_mxfp4_gguf,10240,2048,2048), context = 10240 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_mxfp4_gguf,20480,2048,2048), context = 20480 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_mxfp4_gguf,30720,2048,2048), context = 30720 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_mxfp4_gguf,40960,2048,2048), context = 40960 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_mxfp4_gguf,61440,2048,2048), context = 61440 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_mxfp4_gguf,81920,2048,2048,"q8_0","q8_0"), context = 81920 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_mxfp4_gguf,102400,2048,2048,"q8_0","q8_0"), context = 102400 },
+		{ binary = llama_bin, args = get_glm_instruct_args(glm_47_flash_mxfp4_gguf,122880,2048,2048,"q8_0","q8_0"), context = 122880 },
 	},
 }
 
@@ -318,11 +383,14 @@ snowflake_arctic_embed_model = {
 models = {
 	qwen3_30b_instruct_model,
 	qwen3_30b_thinking_model,
+	qwen3_30b_coder_model,
 	qwen3_next_80b_instruct_model,
 	qwen3_next_80b_thinking_model,
-	qwen3_30b_coder_model,
+	qwen3_next_coder_model,
 	glm_47_flash_model,
-	glm_47_flash_nothinking_model,
+	glm_47_flash_instruct_model,
+	glm_47_flash_mxfp4_model,
+	glm_47_flash_mxfp4_instruct_model,
 	ministral_3_3b_instruct_model,
 	snowflake_arctic_embed_model,
 }
