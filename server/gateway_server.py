@@ -44,7 +44,7 @@ class GatewayServer:
         self.logger.debug("Starting GatewayServer")
 
         # Create aiohttp application
-        self.app = aiohttp.web.Application()
+        self.app = aiohttp.web.Application(client_max_size=None)
 
         # Register routes
         self.app.router.add_get(
