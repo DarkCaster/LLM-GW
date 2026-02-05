@@ -94,8 +94,8 @@ llama_default_args = {
 }
 
 -- full path to llama binaries, download from https://github.com/ggml-org/llama.cpp/releases
-llama_bin = [[C:\llama-b7833-cuda-13.1-x64\llama-server.exe]]
-llama_tokenize_bin = [[C:\llama-b7833-cuda-13.1-x64\llama-tokenize.exe]]
+llama_bin = [[C:\llama-b7940-cuda-13.1-x64\llama-server.exe]]
+llama_tokenize_bin = [[C:\llama-b7940-cuda-13.1-x64\llama-tokenize.exe]]
 
 -- helper function to construct default params for llama-server,
 -- trying to best fit models into VRAM and maximize performance, effective for MoE models
@@ -121,7 +121,7 @@ end
 -- https://huggingface.co/unsloth/Qwen3-Next-80B-A3B-Thinking-GGUF/tree/main
 qwen3_30b_instruct_gguf = [[C:\Qwen\Qwen3-30B-A3B-Instruct-2507-UD-Q3_K_XL.gguf]]
 qwen3_30b_thinking_gguf = [[C:\Qwen\Qwen3-30B-A3B-Thinking-2507-UD-Q3_K_XL.gguf]]
-qwen3_30b_coder_gguf = [[C:\Qwen\Qwen3-Coder-30B-A3B-Instruct-UD-Q3_K_XL.gguf]]
+qwen3_30b_coder_gguf = [[C:\Qwen\Qwen3-Coder-30B-A3B-Instruct-UD-Q5_K_XL.gguf]]
 qwen3_next_80b_instruct_gguf = [[C:\Qwen\Qwen3-Next-80B-A3B-Instruct-UD-IQ2_XXS.gguf]]
 qwen3_next_80b_thinking_gguf = [[C:\Qwen\Qwen3-Next-80B-A3B-Thinking-UD-IQ2_XXS.gguf]]
 qwen3_next_coder_gguf = [[C:\Qwen\Qwen3-Coder-Next-UD-IQ2_XXS.gguf]]
@@ -139,12 +139,13 @@ qwen3_30b_instruct_model = {
 	connect = llama_url,
 	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_30b_instruct_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
 	variants = {
-		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_30b_instruct_gguf,10000,2048,2048), context = 10000 },
-		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_30b_instruct_gguf,20000,2048,2048), context = 20000 },
-		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_30b_instruct_gguf,30000,2048,2048), context = 30000 },
+		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_30b_instruct_gguf,10240,2048,2048), context = 10240 },
+		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_30b_instruct_gguf,20480,2048,2048), context = 20480 },
+		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_30b_instruct_gguf,30720,2048,2048), context = 30720 },
 		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_30b_instruct_gguf,40960,2048,2048), context = 40960 },
+		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_30b_instruct_gguf,61440,1024,2048,"q8_0","q8_0"), context = 61440 },
 		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_30b_instruct_gguf,81920,1024,2048,"q8_0","q8_0"), context = 81920 },
-		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_30b_instruct_gguf,122880,512,2048,"q8_0","q8_0"), context = 122880 },
+		{ binary = llama_bin, args = get_qwen3moe_instr_args(qwen3_30b_instruct_gguf,102400,512,2048,"q8_0","q8_0"), context = 102400 },
 	},
 }
 
@@ -203,12 +204,13 @@ qwen3_30b_thinking_model = {
 	connect = llama_url,
 	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_30b_thinking_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
 	variants = {
-		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_30b_thinking_gguf,10000,2048,2048), context = 10000 },
-		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_30b_thinking_gguf,20000,2048,2048), context = 20000 },
-		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_30b_thinking_gguf,30000,2048,2048), context = 30000 },
+		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_30b_thinking_gguf,10240,2048,2048), context = 10240 },
+		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_30b_thinking_gguf,20480,2048,2048), context = 20480 },
+		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_30b_thinking_gguf,30720,2048,2048), context = 30720 },
 		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_30b_thinking_gguf,40960,2048,2048), context = 40960 },
+		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_30b_thinking_gguf,61440,1024,2048,"q8_0","q8_0"), context = 61440 },
 		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_30b_thinking_gguf,81920,1024,2048,"q8_0","q8_0"), context = 81920 },
-		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_30b_thinking_gguf,122880,512,2048,"q8_0","q8_0"), context = 122880 },
+		{ binary = llama_bin, args = get_qwen3moe_think_args(qwen3_30b_thinking_gguf,102400,512,2048,"q8_0","q8_0"), context = 102400 },
 	},
 }
 
@@ -236,7 +238,7 @@ qwen3_next_80b_thinking_model = {
 
 function get_qwen3moe_coder_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	return concat_arrays(args, {"--jinja", "--temp", "0.7", "--min-p", "0.0", "--top-p", "0.80", "--top-k", "20", "--repeat-penalty", "1.05"})
+	return concat_arrays(args, {"--spec-type", "ngram-map-k", "--spec-ngram-size-n", "8", "--spec-ngram-size-m", "8", "--spec-ngram-min-hits", "2", "--jinja", "--temp", "0.7", "--min-p", "0.0", "--top-p", "0.80", "--top-k", "20", "--repeat-penalty", "1.05"})
 end
 
 qwen3_30b_coder_model = {
@@ -245,12 +247,13 @@ qwen3_30b_coder_model = {
 	connect = llama_url,
 	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", qwen3_30b_coder_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
 	variants = {
-		{ binary = llama_bin, args = get_qwen3moe_coder_args(qwen3_30b_coder_gguf,10000,2048,2048), context = 10000 },
-		{ binary = llama_bin, args = get_qwen3moe_coder_args(qwen3_30b_coder_gguf,20000,2048,2048), context = 20000 },
-		{ binary = llama_bin, args = get_qwen3moe_coder_args(qwen3_30b_coder_gguf,30000,2048,2048), context = 30000 },
+		{ binary = llama_bin, args = get_qwen3moe_coder_args(qwen3_30b_coder_gguf,10240,2048,2048), context = 10240 },
+		{ binary = llama_bin, args = get_qwen3moe_coder_args(qwen3_30b_coder_gguf,20480,2048,2048), context = 20480 },
+		{ binary = llama_bin, args = get_qwen3moe_coder_args(qwen3_30b_coder_gguf,30720,2048,2048), context = 30720 },
 		{ binary = llama_bin, args = get_qwen3moe_coder_args(qwen3_30b_coder_gguf,40960,2048,2048), context = 40960 },
+		{ binary = llama_bin, args = get_qwen3moe_coder_args(qwen3_30b_coder_gguf,61440,1024,2048,"q8_0","q8_0"), context = 61440 },
 		{ binary = llama_bin, args = get_qwen3moe_coder_args(qwen3_30b_coder_gguf,81920,1024,2048,"q8_0","q8_0"), context = 81920 },
-		{ binary = llama_bin, args = get_qwen3moe_coder_args(qwen3_30b_coder_gguf,122880,512,2048,"q8_0","q8_0"), context = 122880 },
+		{ binary = llama_bin, args = get_qwen3moe_coder_args(qwen3_30b_coder_gguf,102400,512,2048,"q8_0","q8_0"), context = 102400 },
 	},
 }
 
@@ -281,11 +284,12 @@ ministral_3_3b_instruct_model = {
 
 -- https://huggingface.co/unsloth/GLM-4.7-Flash-GGUF
 -- https://huggingface.co/noctrex/GLM-4.7-Flash-MXFP4_MOE-GGUF
-glm_47_flash_gguf = [[C:\Sync\ML\LLM\GLM\GLM-4.7-Flash-UD-Q5_K_XL.gguf]] -- heavier quant, seem to be a bit overkill for my tasks
-glm_47_flash_mxfp4_gguf = [[C:\Sync\ML\LLM\GLM\GLM-4.7-Flash-MXFP4_MOE.gguf]]  -- small fast static quant, seem to work better with non-english texts for me than other 4bit quants with imatrix
+glm_47_flash_gguf = [[C:\GLM\GLM-4.7-Flash-UD-Q5_K_XL.gguf]] -- heavier quant, seem to be a bit overkill for my tasks
+glm_47_flash_mxfp4_gguf = [[C:\GLM\GLM-4.7-Flash-MXFP4_MOE.gguf]]  -- small fast static quant, seem to work better with non-english texts for me than other 4bit quants with imatrix
 
 -- "--temp", "0.7", "--top-p", "1.0", -- for tool calling
 -- "--temp", "1.0", "--top-p", "0.95", -- for general use-case
+-- "--spec-type", "ngram-mod", "--spec-ngram-size-n", "24", "--draft-min", "48", "--draft-max", "64"
 function get_glm_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	return concat_arrays(args, {"--spec-type", "ngram-map-k", "--spec-ngram-size-n", "8", "--spec-ngram-size-m", "8", "--spec-ngram-min-hits", "2", "--jinja", "--temp", "0.7", "--repeat-penalty", "1.0"})
