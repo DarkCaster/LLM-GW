@@ -1,6 +1,5 @@
 import argparse
 import sys
-import shutil
 import asyncio
 import aiohttp
 import python_lua_helper
@@ -68,8 +67,6 @@ def main() -> None:
     try:
         config_loader = config.ConfigLoader(args.config)
         cfg = config_loader.cfg
-        temp_dir = config_loader.temp_dir
-        log.info(f"Using temp directory: {temp_dir}")
     except Exception as e:
         log.error(f"Failed to load configuration: {e}")
         sys.exit(1)
@@ -82,11 +79,6 @@ def main() -> None:
         log.info(f"Clearing dump files from directory: {dumps_dir}")
         clear_dumps_directory(dumps_dir)
 
-    def temp_cleanup():
-        if cfg.get_bool("profile.temp_cleanup", True):
-            log.info(f"Cleaning up temp dir {temp_dir}")
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
     try:
         log.info("Starting LLM gateway")
         # Run the async main function
@@ -98,7 +90,6 @@ def main() -> None:
         sys.exit(1)
     finally:
         log.info("Stopping LLM gateway")
-        temp_cleanup()
 
 
 if __name__ == "__main__":
