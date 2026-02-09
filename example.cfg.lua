@@ -127,11 +127,15 @@ function clone_with_extra_args(source_model, extra_args, target_name)
 	return target_model
 end
 
+-- Qwen3-MoE model examples suitable for HW configs with 32G RAM + 8G VRAM, fast SSD is highly recommended
+-- 30B models with Q3 quants will leave extra space for other programs, 80B models will fill almost all RAM.
+
 -- https://huggingface.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF/tree/main
 -- https://huggingface.co/unsloth/Qwen3-30B-A3B-Thinking-2507-GGUF/tree/main
 -- https://huggingface.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF/tree/main
 -- https://huggingface.co/unsloth/Qwen3-Next-80B-A3B-Instruct-GGUF/tree/main
 -- https://huggingface.co/unsloth/Qwen3-Next-80B-A3B-Thinking-GGUF/tree/main
+-- https://huggingface.co/unsloth/Qwen3-Coder-Next-GGUF/tree/main
 qwen3_30b_instruct_gguf = [[C:\Qwen\Qwen3-30B-A3B-Instruct-2507-UD-Q3_K_XL.gguf]]
 qwen3_30b_thinking_gguf = [[C:\Qwen\Qwen3-30B-A3B-Thinking-2507-UD-Q3_K_XL.gguf]]
 qwen3_30b_coder_gguf = [[C:\Qwen\Qwen3-Coder-30B-A3B-Instruct-UD-Q5_K_XL.gguf]]
@@ -144,7 +148,6 @@ function get_qwen3moe_instr_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	return concat_arrays(args, {"--spec-type", "ngram-map-k", "--spec-ngram-size-n", "8", "--spec-ngram-size-m", "8", "--spec-ngram-min-hits", "2", "--jinja", "--temp", "0.7", "--min-p", "0.00", "--top-p", "0.80", "--top-k", "20", "--presence-penalty", "0.1", "--repeat-penalty", "1.05"})
 end
 
--- Qwen3-MoE model examples suitable for HW configs with 32G RAM + 8G VRAM (will fill almost all RAM and VRAM)
 -- you may lower RAM usage a bit by lowering 'ub' parameter from 2048 to 512, however this will slow down prompt processing
 qwen3_30b_instruct_model = {
 	engine = presets.engines.llamacpp,
