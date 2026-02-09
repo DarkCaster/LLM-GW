@@ -312,10 +312,7 @@ glm_47_flash_model = {
 	connect = llama_url,
 	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", glm_47_flash_gguf }, extra_tokens_per_message = 8, extra_tokens = 0 },
 	variants = {
-		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,10240,2048,2048), context = 10240 },
-		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,20480,2048,2048), context = 20480 },
-		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,30720,2048,2048), context = 30720 },
-		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,40960,2048,2048), context = 40960 },
+		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,30720,1024,2048), context = 30720 },
 		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,61440,2048,2048), context = 61440 },
 		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,81920,2048,2048,"q8_0","q8_0"), context = 81920 },
 		{ binary = llama_bin, args = get_glm_args(glm_47_flash_gguf,102400,2048,2048,"q8_0","q8_0"), context = 102400 },
