@@ -338,13 +338,8 @@ gpt_oss_20_model = {
 	connect = llama_url,
 	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", gpt_oss_20_gguf }, extra_tokens_per_message = 8, extra_tokens = 65 },
 	variants = {
-		{ binary = llama_bin, args = get_gpt_oss_20_args(gpt_oss_20_gguf,10240,1024,2048), context = 10240 },
-		{ binary = llama_bin, args = get_gpt_oss_20_args(gpt_oss_20_gguf,20480,1024,2048), context = 20480 },
-		{ binary = llama_bin, args = get_gpt_oss_20_args(gpt_oss_20_gguf,30720,1024,2048), context = 30720 },
-		{ binary = llama_bin, args = get_gpt_oss_20_args(gpt_oss_20_gguf,40960,1024,2048), context = 40960 },
-		{ binary = llama_bin, args = get_gpt_oss_20_args(gpt_oss_20_gguf,61440,1024,2048), context = 61440 },
-		{ binary = llama_bin, args = get_gpt_oss_20_args(gpt_oss_20_gguf,81920,1024,2048), context = 81920 },
-		{ binary = llama_bin, args = get_gpt_oss_20_args(gpt_oss_20_gguf,102400,1024,2048), context = 102400 },
+		{ binary = llama_bin, args = get_gpt_oss_20_args(gpt_oss_20_gguf,40960,2048,2048), context = 40960 },
+		{ binary = llama_bin, args = get_gpt_oss_20_args(gpt_oss_20_gguf,81920,2048,2048), context = 81920 },
 		{ binary = llama_bin, args = get_gpt_oss_20_args(gpt_oss_20_gguf,131072,1024,2048), context = 131072 },
 	},
 }
