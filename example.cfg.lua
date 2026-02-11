@@ -326,6 +326,25 @@ gpt_oss_20_model = {
 gpt_oss_20_high_model = clone_with_extra_args(gpt_oss_20_model, {"--chat-template-kwargs", [[{"reasoning_effort":"high"}]]}, "gpt-oss-20b-high")
 gpt_oss_20_low_model = clone_with_extra_args(gpt_oss_20_model, {"--chat-template-kwargs", [[{"reasoning_effort":"low"}]]}, "gpt-oss-20b-low")
 
+-- https://huggingface.co/bartowski/moonshotai_Kimi-Linear-48B-A3B-Instruct-GGUF
+kimi_linear_gguf = [[C:\Kimi\moonshotai_Kimi-Linear-48B-A3B-Instruct-IQ4_XS.gguf]]
+
+function kimi_linear_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	return concat_arrays(args, {"--swa-checkpoints", "0", "--jinja"})
+end
+
+kimi_linear_model = {
+	engine = presets.engines.llamacpp,
+	name = "kimi-linear",
+	connect = llama_url,
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", kimi_linear_gguf }, extra_tokens_per_message = 8, extra_tokens = 65 },
+	variants = { -- model vram usage not depending very much on context size, but reload delay is too long, so create only 2 profiles.
+		{ binary = llama_bin, args = kimi_linear_args(kimi_linear_gguf,61440,1024,2048), context = 61440 },
+		{ binary = llama_bin, args = kimi_linear_args(kimi_linear_gguf,122880,1024,2048), context = 122880 },
+	},
+}
+
 -- https://huggingface.co/Casual-Autopsy/snowflake-arctic-embed-l-v2.0-gguf/tree/main
 snowflake_arctic_embed_gguf = [[C:\Embedding\snowflake-arctic-embed-l-v2.0-f16.gguf]]
 
@@ -354,6 +373,7 @@ models = {
 	gpt_oss_20_high_model,
 	gpt_oss_20_model,
 	gpt_oss_20_low_model,
+	kimi_linear_model,
 	ministral_3_3b_instruct_model,
 	snowflake_arctic_embed_model,
 }
