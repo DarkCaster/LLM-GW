@@ -127,6 +127,16 @@ function clone_with_extra_args(source_model, extra_args, target_name)
 	return target_model
 end
 
+function concat_args_with_ngram_map(base_args, extra_args)
+	local args_with_ngram = concat_arrays(base_args, {"--spec-type", "ngram-map-k", "--spec-ngram-size-n", "8", "--spec-ngram-size-m", "8", "--spec-ngram-min-hits", "2"})
+	return concat_arrays(args_with_ngram, extra_args)
+end
+
+function concat_args_with_ngram_mod(base_args, extra_args)
+	local args_with_ngram = concat_arrays(base_args, {"--spec-type", "ngram-mod", "--spec-ngram-size-n", "24", "--draft-min", "48", "--draft-max", "64"})
+	return concat_arrays(args_with_ngram, extra_args)
+end
+
 -- Qwen3-MoE model examples suitable for HW configs with 32G RAM + 8G VRAM, fast SSD is highly recommended
 -- 30B models with Q3 quants will leave extra space for other programs, 80B models will fill almost all RAM.
 
