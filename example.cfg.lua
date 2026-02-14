@@ -155,7 +155,7 @@ qwen3_next_coder_gguf = [[C:\Qwen\Qwen3-Coder-Next-UD-IQ2_XXS.gguf]]
 
 function get_qwen3moe_instr_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	return concat_arrays(args, {"--spec-type", "ngram-map-k", "--spec-ngram-size-n", "8", "--spec-ngram-size-m", "8", "--spec-ngram-min-hits", "2", "--jinja", "--temp", "0.7", "--min-p", "0.00", "--top-p", "0.80", "--top-k", "20", "--presence-penalty", "0.1", "--repeat-penalty", "1.05"})
+	return concat_arrays(args, {"--jinja", "--temp", "0.7", "--min-p", "0.00", "--top-p", "0.80", "--top-k", "20", "--presence-penalty", "0.1", "--repeat-penalty", "1.05"})
 end
 
 -- you may lower RAM usage a bit by lowering 'ub' parameter from 2048 to 512, however this will slow down prompt processing
@@ -209,7 +209,7 @@ qwen3_next_coder_model = {
 
 function get_qwen3moe_think_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	return concat_arrays(args, {"--spec-type", "ngram-map-k", "--spec-ngram-size-n", "8", "--spec-ngram-size-m", "8", "--spec-ngram-min-hits", "2", "--jinja", "--temp", "0.6", "--min-p", "0.00", "--top-p", "0.95", "--top-k", "20", "--presence-penalty", "0.1", "--repeat-penalty", "1.05"})
+	return concat_arrays(args, {"--jinja", "--temp", "0.6", "--min-p", "0.00", "--top-p", "0.95", "--top-k", "20", "--presence-penalty", "0.1", "--repeat-penalty", "1.05"})
 end
 
 qwen3_30b_thinking_model = {
@@ -245,7 +245,7 @@ qwen3_next_80b_thinking_model = {
 
 function get_qwen3moe_coder_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	return concat_arrays(args, {"--spec-type", "ngram-map-k", "--spec-ngram-size-n", "8", "--spec-ngram-size-m", "8", "--spec-ngram-min-hits", "2", "--jinja", "--temp", "0.7", "--min-p", "0.0", "--top-p", "0.80", "--top-k", "20", "--repeat-penalty", "1.05"})
+	return concat_arrays(args, {"--jinja", "--temp", "0.7", "--min-p", "0.0", "--top-p", "0.80", "--top-k", "20", "--repeat-penalty", "1.05"})
 end
 
 qwen3_30b_coder_model = {
@@ -291,10 +291,9 @@ glm_47_flash_gguf = [[C:\GLM\GLM-4.7-Flash-UD-Q5_K_XL.gguf]]
 
 -- "--temp", "0.7", "--top-p", "1.0", -- for tool calling
 -- "--temp", "1.0", "--top-p", "0.95", -- for general use-case
--- "--spec-type", "ngram-mod", "--spec-ngram-size-n", "24", "--draft-min", "48", "--draft-max", "64"
 function get_glm_args(gguf, ctx_sz, ub, b, ctk, ctv)
 	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	return concat_arrays(args, {"--spec-type", "ngram-map-k", "--spec-ngram-size-n", "8", "--spec-ngram-size-m", "8", "--spec-ngram-min-hits", "2", "--jinja", "--temp", "0.7", "--repeat-penalty", "1.0"})
+	return concat_arrays(args, {"--jinja", "--temp", "0.7", "--repeat-penalty", "1.0"})
 end
 
 glm_47_flash_model = {
