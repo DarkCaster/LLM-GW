@@ -106,15 +106,18 @@ local function check_model(model, model_name)
 		error(string.format("Configuration error at '%s.variants': must contain at least one variant", base_path))
 	end
 	-- Check each variant based on engine type
-	for i, variant in ipairs(model.variants) do
-		assert_type(variant, "table", base_path .. string.format(".variants[%d]", i))
-		if model.engine == presets.engines.llamacpp then
-			check_llamacpp_variant(variant, model_name, i, model)
-		else if model.engine == presets.engines.llamacpp_secondary then
-			check_llamacpp_variant(variant, model_name, i, model)
-		else
-			error(string.format("Configuration error at '%s.engine': unknown engine type '%s'", base_path, model.engine))
+	if model.engine == presets.engines.llamacpp or model.engine == presets.engines.llamacpp_secondary then
+		model.primary = true
+		if model.engine == presets.engines.llamacpp_secondary then
+			model.primary = false
+			model.engine = presets.engines.llamacpp
 		end
+		for i, variant in ipairs(model.variants) do
+			assert_type(variant, "table", base_path .. string.format(".variants[%d]", i))
+			check_llamacpp_variant(variant, model_name, i, model)
+		end
+	else
+		error(string.format("Configuration error at '%s.engine': unknown engine type '%s'", base_path, model.engine))
 	end
 end
 
