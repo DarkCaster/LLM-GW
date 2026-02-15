@@ -21,8 +21,8 @@ class ModelSelector:
             engine_manager: EngineManager instance for managing engine lifecycle
             cfg: PyLuaHelper configuration object
         """
-        self.engine_manager = engine_manager
-        self.cfg = cfg
+        self._engine_manager = engine_manager
+        self._cfg = cfg
         self.logger = logger.get_logger(self.__class__.__name__)
         self.logger.info("ModelSelector initialized")
 
@@ -49,7 +49,7 @@ class ModelSelector:
             # For embedding requests just load first available configuration and use it
             config = {"operation": "text_query", "context_size_required": 0}
             # Get engine client for final operation
-            client, timeout = await self.engine_manager.ensure_engine(
+            client, timeout = await self._engine_manager.ensure_engine(
                 model_name, config
             )
             if client is None:
@@ -64,7 +64,7 @@ class ModelSelector:
             # - select suitable model-variant configuration and start engine for it
 
             # Try getting standalone tokenizer for quick estimation without starting the model
-            standalone_tokenizer = await self.engine_manager.ensure_local_tokenizer(
+            standalone_tokenizer = await self._engine_manager.ensure_local_tokenizer(
                 model_name
             )
             context_size_required = 0
@@ -86,7 +86,7 @@ class ModelSelector:
                 "context_size_required": context_size_required,
             }
             # Get engine client for context size estimation
-            estimation_client, _ = await self.engine_manager.ensure_engine(
+            estimation_client, _ = await self._engine_manager.ensure_engine(
                 model_name, estimation_config
             )
             # Estimate tokens
@@ -101,7 +101,7 @@ class ModelSelector:
                 "context_size_required": context_size_required,
             }
             # Get engine client for final operation
-            final_client, idle_timeout = await self.engine_manager.ensure_engine(
+            final_client, idle_timeout = await self._engine_manager.ensure_engine(
                 model_name, text_query_config
             )
             if final_client is None:
@@ -121,8 +121,8 @@ class ModelSelector:
         """
         model_names = []
 
-        for i in self.cfg.get_table_seq("models"):
-            model_name = self.cfg.get(f"models.{i}.name")
+        for i in self._cfg.get_table_seq("models"):
+            model_name = self._cfg.get(f"models.{i}.name")
             if model_name:
                 model_names.append(model_name)
 
