@@ -110,6 +110,8 @@ local function check_model(model, model_name)
 		assert_type(variant, "table", base_path .. string.format(".variants[%d]", i))
 		if model.engine == presets.engines.llamacpp then
 			check_llamacpp_variant(variant, model_name, i, model)
+		else if model.engine == presets.engines.llamacpp_sideload then
+			check_llamacpp_variant(variant, model_name, i, model)
 		else
 			error(string.format("Configuration error at '%s.engine': unknown engine type '%s'", base_path, model.engine))
 		end
