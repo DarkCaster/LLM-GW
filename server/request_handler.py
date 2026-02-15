@@ -223,7 +223,9 @@ class RequestHandler:
                 except Exception as e:
                     self.logger.error(f"Failed to read request text: {e}")
                     if self._cfg.get("server.dumps_dir") is not None:
-                        dump_writer = DumpWriter(self._cfg.get("server.dumps_dir"), "request_read_error")
+                        dump_writer = DumpWriter(
+                            self._cfg.get("server.dumps_dir"), "request_read_error"
+                        )
                         dump_writer.write_error(e)
                     return self._return_error("Failed to read request body", 400, e)
                 # Parse JSON from the already-read text
@@ -232,7 +234,9 @@ class RequestHandler:
                 except Exception as e:
                     self.logger.error(f"Failed to parse JSON body: {e}")
                     if self._cfg.get("server.dumps_dir") is not None:
-                        dump_writer = DumpWriter(self._cfg.get("server.dumps_dir"), "request_parse_error")
+                        dump_writer = DumpWriter(
+                            self._cfg.get("server.dumps_dir"), "request_parse_error"
+                        )
                         dump_writer.write_request(request_text)
                         dump_writer.write_error(e)
                     return self._return_error("Invalid JSON in request body", 400, e)
@@ -240,21 +244,31 @@ class RequestHandler:
                 if "model" not in request_data:
                     self.logger.error("Missing 'model' field in request")
                     if self._cfg.get("server.dumps_dir") is not None:
-                        dump_writer = DumpWriter(self._cfg.get("server.dumps_dir"), "model_missing_error")
+                        dump_writer = DumpWriter(
+                            self._cfg.get("server.dumps_dir"), "model_missing_error"
+                        )
                         dump_writer.write_request(request_text)
-                        dump_writer.write_error(ValueError("Missing required field: 'model'"))
+                        dump_writer.write_error(
+                            ValueError("Missing required field: 'model'")
+                        )
                     return self._return_error("Missing required field: 'model'", 400)
                 # Extract model name
                 model_name = request_data["model"]
                 # Now create proper dump_writer with parsed model name
                 if self._cfg.get("server.dumps_dir") is not None:
-                    dump_writer = DumpWriter(self._cfg.get("server.dumps_dir"), model_name)
+                    dump_writer = DumpWriter(
+                        self._cfg.get("server.dumps_dir"), model_name
+                    )
                     # Write JSON request with human readable indentation (reserialize it)
                     try:
-                        formatted_request = json.dumps(request_data, indent=2, ensure_ascii=False)
+                        formatted_request = json.dumps(
+                            request_data, indent=2, ensure_ascii=False
+                        )
                         dump_writer.write_request(formatted_request)
                     except Exception as e:
-                        self.logger.error(f"Failed to write formatted request to dump: {e}")
+                        self.logger.error(
+                            f"Failed to write formatted request to dump: {e}"
+                        )
                         # Fallback to raw request text if formatting fails
                         dump_writer.write_request(request_text)
                 # Handle request
@@ -364,7 +378,9 @@ class RequestHandler:
                                 if response_text is not None:
                                     # Write JSON response to dump with human readable indentation (reserialize it)
                                     response_json = json.loads(response_text)
-                                    formatted_response = json.dumps(response_json, indent=2, ensure_ascii=False)
+                                    formatted_response = json.dumps(
+                                        response_json, indent=2, ensure_ascii=False
+                                    )
                                     dump_writer.write_response(formatted_response)
                             except Exception as e:
                                 self.logger.error(
