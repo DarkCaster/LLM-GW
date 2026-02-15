@@ -5,7 +5,7 @@ presets={}
 -- engines, supported by this LLM-GW software
 presets.engines={}
 presets.engines.llamacpp="llama.cpp"
-presets.engines.llamacpp_sideload="llama.cpp.sideload"
+presets.engines.llamacpp_secondary="llama.cpp.secondary"
 
 function concat_arrays(a1, a2)
 	local result = {}
