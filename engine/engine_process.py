@@ -21,16 +21,15 @@ class EngineProcess:
             args: List of command-line arguments for the binary
             work_dir: Working directory for the process (optional)
         """
-        self.binary_path = binary_path
-        self.args = args
-        self.work_dir = work_dir
-        self.logger = logger.get_logger(self.__class__.__name__)
-
+        self._binary_path = binary_path
+        self._args = args
+        self._work_dir = work_dir
         self._process: asyncio.subprocess.Process | None = None
         self._status = "stopped"
         self._start_time: float | None = None
         self._stdout_task: asyncio.Task | None = None
         self._stderr_task: asyncio.Task | None = None
+        self.logger = logger.get_logger(self.__class__.__name__)
 
     async def start(self) -> None:
         """
@@ -44,17 +43,17 @@ class EngineProcess:
             return
 
         self.logger.info(
-            f"Starting engine process: {self.binary_path} with args: {self.args}"
+            f"Starting engine process: {self._binary_path} with args: {self._args}"
         )
 
         try:
             # Spawn the subprocess
             self._process = await asyncio.subprocess.create_subprocess_exec(
-                self.binary_path,
-                *self.args,
+                self._binary_path,
+                *self._args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=self.work_dir,
+                cwd=self._work_dir,
             )
 
             self._start_time = time.time()
