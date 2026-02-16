@@ -12,19 +12,34 @@ class ModelSelector:
     """
 
     def __init__(
-        self, engine_manager: EngineManager, cfg: python_lua_helper.PyLuaHelper
+        self,
+        primary_engine_manager: EngineManager,
+        secondary_engine_manager: EngineManager,
+        cfg: python_lua_helper.PyLuaHelper,
     ):
         """
         Initialize ModelSelector.
 
         Args:
-            engine_manager: EngineManager instance for managing engine lifecycle
+            primary_engine_manager: EngineManager instance for managing engine lifecycle
+            secondary_engine_manager: EngineManager instance for managing engine lifecycle
             cfg: PyLuaHelper configuration object
         """
-        self._engine_manager = engine_manager
+        self._primary_engine_manager = primary_engine_manager
+        self._secondary_engine_manager = secondary_engine_manager
         self._cfg = cfg
         self.logger = logger.get_logger(self.__class__.__name__)
         self.logger.info("ModelSelector initialized")
+
+    def _get_model_index(self, model_name: str) -> int:
+        model_index = None
+        for i in self._cfg.get_table_seq("models"):
+            if self._cfg.get(f"models.{i}.name") == model_name:
+                model_index = i
+                break
+        if model_index is None:
+            raise ValueError(f"Model '{model_name}' not found in configuration")
+        return model_index
 
     async def select_variant(
         self, path: str, model_name: str, request_data: dict
@@ -43,15 +58,17 @@ class ModelSelector:
             ValueError: If model not found, engine type not supported, or variant selection fails
         """
         self.logger.debug(f"Selecting suitable configuration for model '{model_name}'")
-
-        # TODO: add more path-specific logic if needed
+        # Select primary or secondary _engine_manager instance depending on model primary flag
+        model_index = self._get_model_index(model_name)
+        engine_manager = self._primary_engine_manager
+        if not self._cfg.get_bool(f"models.{model_index}.primary", True):
+            engine_manager = self._secondary_engine_manager
+        # NOTE: add more path-handling logic here
         if path == "/v1/embeddings":
             # For embedding requests just load first available configuration and use it
             config = {"operation": "text_query", "context_size_required": 0}
             # Get engine client for final operation
-            client, timeout = await self._engine_manager.ensure_engine(
-                model_name, config
-            )
+            client, timeout = await engine_manager.ensure_engine(model_name, config)
             if client is None:
                 raise ValueError(
                     f"Failed to get engine client for model '{model_name}'"
@@ -64,7 +81,7 @@ class ModelSelector:
             # - select suitable model-variant configuration and start engine for it
 
             # Try getting standalone tokenizer for quick estimation without starting the model
-            standalone_tokenizer = await self._engine_manager.ensure_local_tokenizer(
+            standalone_tokenizer = await engine_manager.ensure_local_tokenizer(
                 model_name
             )
             context_size_required = 0
@@ -79,14 +96,13 @@ class ModelSelector:
                 self.logger.info(
                     f"Context size required (standalone tokenizer): {context_size_required} tokens"
                 )
-
             # Construct required_config for context estimation
             estimation_config = {
                 "operation": "text_query",
                 "context_size_required": context_size_required,
             }
             # Get engine client for context size estimation
-            estimation_client, _ = await self._engine_manager.ensure_engine(
+            estimation_client, _ = await engine_manager.ensure_engine(
                 model_name, estimation_config
             )
             # Estimate tokens
@@ -94,14 +110,13 @@ class ModelSelector:
                 request_data
             )
             self.logger.info(f"Context size required: {context_size_required} tokens")
-
             # Construct required_config for operation we wanted
             text_query_config = {
                 "operation": "text_query",
                 "context_size_required": context_size_required,
             }
             # Get engine client for final operation
-            final_client, idle_timeout = await self._engine_manager.ensure_engine(
+            final_client, idle_timeout = await engine_manager.ensure_engine(
                 model_name, text_query_config
             )
             if final_client is None:
