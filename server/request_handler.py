@@ -21,8 +21,8 @@ class RequestHandler:
     def __init__(
         self,
         model_selector: ModelSelector,
-        engine_manager: EngineManager,
-        idle_watchdog: IdleWatchdog,
+        primary_engine_manager: EngineManager,
+        secondary_engine_manager: EngineManager,
         cfg: python_lua_helper.PyLuaHelper,
     ):
         """
@@ -30,19 +30,23 @@ class RequestHandler:
 
         Args:
             model_selector: ModelSelector instance for selecting model variants
-            engine_manager: EngineManager instance for managing engine lifecycle
-            idle_watchdog: IdleWatchdog instance for monitoring idle timeouts
+            primary_engine_manager: EngineManager instance for managing engine lifecycle
+            secondary_engine_manager: EngineManager instance for managing engine lifecycle
             cfg: PyLuaHelper configuration object
             dumps_dir: Optional directory path for dumping requests/responses
         """
         self._model_selector = model_selector
-        self._engine_manager = engine_manager
-        self._idle_watchdog = idle_watchdog
+        self._primary_engine_manager = primary_engine_manager
+        self._secondary_engine_manager = secondary_engine_manager
+        self._primary_idle_watchdog = IdleWatchdog()
+        self._secondary_idle_watchdog = IdleWatchdog()
         self._cfg = cfg
         self._idle_timeout = sys.float_info.max
         self._is_disposed = False
         self._is_stopped = False
         self._request_lock = asyncio.Lock()
+        self._primary_idle_lock = asyncio.Lock()
+        self._secondary_idle_lock = asyncio.Lock()
         # disconnection logic
         self._disconnect_check_interval = 1.0
         self._monitor_task = None
@@ -67,6 +71,16 @@ class RequestHandler:
         except Exception:
             pass
         return "unknown"
+
+    def _get_model_index(self, model_name: str) -> int:
+        model_index = None
+        for i in self._cfg.get_table_seq("models"):
+            if self._cfg.get(f"models.{i}.name") == model_name:
+                model_index = i
+                break
+        if model_index is None:
+            raise ValueError(f"Model '{model_name}' not found in configuration")
+        return model_index
 
     def _is_client_connected(self, request: aiohttp.web.Request) -> bool:
         """
@@ -212,10 +226,10 @@ class RequestHandler:
             self.logger.debug("Acquired request lock, processing request")
             if self._is_stopped or self._is_disposed:
                 return self._return_error("RequestHandler is shuting down", 500)
-            self._idle_watchdog.disarm()
             # Initialize dump writer if dumps_dir is configured
             dump_writer = None
             request_text = None
+            is_primary = None
             try:
                 # Read raw request text
                 try:
@@ -252,8 +266,17 @@ class RequestHandler:
                             ValueError("Missing required field: 'model'")
                         )
                     return self._return_error("Missing required field: 'model'", 400)
-                # Extract model name
+                # Extract model name and engine parameters
                 model_name = request_data["model"]
+                model_index = self._get_model_index(model_name)
+                is_primary = self._cfg.get_bool(f"models.{model_index}.primary", True)
+                # Disarm primary or secondary _idle_watchdog (idle-trigger task should also have primary or secondary lock)
+                if is_primary:
+                    async with self._primary_idle_lock:
+                        self._primary_idle_watchdog.disarm()
+                else:
+                    async with self._secondary_idle_lock:
+                        self._secondary_idle_watchdog.disarm()
                 # Now create proper dump_writer with parsed model name
                 if self._cfg.get("server.dumps_dir") is not None:
                     dump_writer = DumpWriter(
@@ -294,7 +317,6 @@ class RequestHandler:
                     return self._return_error(
                         "Unexpected error during model selection", 500, e
                     )
-
                 # Start monitoring for client connection, add engine_client
                 self._start_monitoring_task(request, engine_client)
                 # Forward request to engine
@@ -411,23 +433,34 @@ class RequestHandler:
                 if dump_writer:
                     dump_writer.close()
                 await self._stop_monitoring_task()
-                self._idle_watchdog.rearm(self._idle_timeout, self.handle_idle_timeout)
+                # Restart idle watchdog for primary or secondary engine
+                if is_primary is not None:
+                    if is_primary:
+                        self._primary_idle_watchdog.rearm(
+                            self._idle_timeout, self.handle_idle_timeout(True)
+                        )
+                    else:
+                        self._secondary_idle_watchdog.rearm(
+                            self._idle_timeout, self.handle_idle_timeout(False)
+                        )
                 self.logger.debug("Releasing request lock")
 
-    async def handle_idle_timeout(self) -> None:
+    async def handle_idle_timeout(self, is_primary: bool) -> None:
         """
         Handle idle timeout, when no incoming requests received in specified time.
         """
-        if self._is_stopped:
+        if self._is_stopped or self._is_disposed:
             return
-        if self._request_lock.locked():
-            self.logger.warning(
-                "Idle timeout handler waiting for lock (another request in progress)"
-            )
-        async with self._request_lock:
-            if self._is_disposed:
-                return
-            await self._engine_manager.stop_current_engine()
+        if is_primary:
+            async with self._primary_idle_lock:
+                if self._is_stopped or self._is_disposed:
+                    return
+                await self._primary_engine_manager.stop_current_engine()
+        else:
+            async with self._secondary_idle_lock:
+                if self._is_stopped or self._is_disposed:
+                    return
+                await self._secondary_engine_manager.stop_current_engine()
 
     async def shutdown(self) -> None:
         """
@@ -442,7 +475,10 @@ class RequestHandler:
                 return
             self._is_stopped = True
             self._is_disposed = True
-            self._idle_watchdog.disarm()
+            async with self._primary_idle_lock:
+                self._primary_idle_watchdog.disarm()
+            async with self._secondary_idle_lock:
+                self._secondary_idle_watchdog.disarm()
 
     def stop(self) -> None:
         """
