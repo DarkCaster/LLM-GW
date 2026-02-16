@@ -23,10 +23,13 @@ async def async_main(cfg: python_lua_helper.PyLuaHelper) -> None:
     # Create aiohttp ClientSession for HTTP communication
     async with aiohttp.ClientSession() as session:
         # Initialize components
-        engine_manager = engine.EngineManager(session, cfg)
-        model_selector = models.ModelSelector(engine_manager, cfg)
+        primary_engine_manager = engine.EngineManager("1", session, cfg)
+        secondary_engine_manager = engine.EngineManager("2", session, cfg)
+        model_selector = models.ModelSelector(
+            primary_engine_manager, secondary_engine_manager, cfg
+        )
         request_handler = server.RequestHandler(
-            model_selector, engine_manager, server.IdleWatchdog(), cfg
+            model_selector, primary_engine_manager, secondary_engine_manager, cfg
         )
         gateway_server = server.GatewayServer(request_handler, cfg)
 
@@ -47,7 +50,8 @@ async def async_main(cfg: python_lua_helper.PyLuaHelper) -> None:
             # Stop serving new requests
             request_handler.stop()
             # Shutdown engine manager
-            await engine_manager.shutdown()
+            await primary_engine_manager.shutdown()
+            await secondary_engine_manager.shutdown()
             await request_handler.shutdown()
             await gateway_server.stop()
 
