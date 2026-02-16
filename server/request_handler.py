@@ -41,7 +41,6 @@ class RequestHandler:
         self._primary_idle_watchdog = IdleWatchdog()
         self._secondary_idle_watchdog = IdleWatchdog()
         self._cfg = cfg
-        self._idle_timeout = sys.float_info.max
         self._is_disposed = False
         self._is_stopped = False
         self._request_lock = asyncio.Lock()
@@ -230,6 +229,7 @@ class RequestHandler:
             dump_writer = None
             request_text = None
             is_primary = None
+            idle_timeout = sys.float_info.max
             try:
                 # Read raw request text
                 try:
@@ -303,7 +303,7 @@ class RequestHandler:
                 try:
                     (
                         engine_client,
-                        self._idle_timeout,
+                        idle_timeout,
                     ) = await self._model_selector.select_variant(
                         path, model_name, request_data
                     )
@@ -437,30 +437,36 @@ class RequestHandler:
                 if is_primary is not None:
                     if is_primary:
                         self._primary_idle_watchdog.rearm(
-                            self._idle_timeout, lambda: self.handle_idle_timeout(True)
+                            idle_timeout,
+                            lambda: self.handle_idle_timeout(
+                                self._primary_idle_lock,
+                                self._primary_engine_manager,
+                            ),
                         )
                     else:
                         self._secondary_idle_watchdog.rearm(
-                            self._idle_timeout, lambda: self.handle_idle_timeout(False)
+                            idle_timeout,
+                            lambda: self.handle_idle_timeout(
+                                self._secondary_idle_lock,
+                                self._secondary_engine_manager,
+                            ),
                         )
                 self.logger.debug("Releasing request lock")
 
-    async def handle_idle_timeout(self, is_primary: bool) -> None:
+    async def handle_idle_timeout(
+        self,
+        lock: asyncio.Lock,
+        engine_manager: EngineManager,
+    ) -> None:
         """
         Handle idle timeout, when no incoming requests received in specified time.
         """
         if self._is_stopped or self._is_disposed:
             return
-        if is_primary:
-            async with self._primary_idle_lock:
-                if self._is_stopped or self._is_disposed:
-                    return
-                await self._primary_engine_manager.stop_current_engine()
-        else:
-            async with self._secondary_idle_lock:
-                if self._is_stopped or self._is_disposed:
-                    return
-                await self._secondary_engine_manager.stop_current_engine()
+        async with lock:
+            if self._is_stopped or self._is_disposed:
+                return
+            await engine_manager.stop_current_engine()
 
     async def shutdown(self) -> None:
         """
