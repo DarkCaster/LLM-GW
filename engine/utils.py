@@ -2,7 +2,7 @@ import logger
 
 
 def parse_openai_request_content(request_data: dict) -> tuple[str, str, int, int]:
-    log = logger.get_logger("")
+    log = logger.get_logger("Utils")
     # for now we can only get content from `input` or `messages` arrays, depending on operation
     input = request_data.get("input")
     messages = request_data.get("messages")

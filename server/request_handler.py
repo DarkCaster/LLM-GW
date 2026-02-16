@@ -437,11 +437,11 @@ class RequestHandler:
                 if is_primary is not None:
                     if is_primary:
                         self._primary_idle_watchdog.rearm(
-                            self._idle_timeout, self.handle_idle_timeout(True)
+                            self._idle_timeout, lambda: self.handle_idle_timeout(True)
                         )
                     else:
                         self._secondary_idle_watchdog.rearm(
-                            self._idle_timeout, self.handle_idle_timeout(False)
+                            self._idle_timeout, lambda: self.handle_idle_timeout(False)
                         )
                 self.logger.debug("Releasing request lock")
 
