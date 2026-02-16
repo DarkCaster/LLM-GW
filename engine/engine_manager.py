@@ -20,7 +20,7 @@ class EngineManager:
     """
 
     def __init__(
-        self, session: aiohttp.ClientSession, cfg: python_lua_helper.PyLuaHelper
+        self, suffix: str, session: aiohttp.ClientSession, cfg: python_lua_helper.PyLuaHelper
     ):
         """
         Initialize EngineManager.
@@ -39,7 +39,7 @@ class EngineManager:
         self._current_config: Dict[str, Any] | None = None
         self._current_engine_type: str | None = None
         self._current_idle_timeout: float = sys.float_info.max
-        self.logger = logger.get_logger(self.__class__.__name__)
+        self.logger = logger.get_logger(f"{self.__class__.__name__}.{suffix}")
         self.logger.info("EngineManager initialized")
 
     def _check_model_configuration(
