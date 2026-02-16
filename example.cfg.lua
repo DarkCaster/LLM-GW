@@ -94,8 +94,8 @@ llama_default_args = {
 }
 
 -- full path to llama binaries, download from https://github.com/ggml-org/llama.cpp/releases
-llama_bin = [[D:\llama-b8054-cuda-13.1-x64\llama-server.exe]]
-llama_tokenize_bin = [[D:\llama-b8054-cuda-13.1-x64\llama-tokenize.exe]]
+llama_bin = [[D:\llama-b8069-cuda-13.1-x64\llama-server.exe]]
+llama_tokenize_bin = [[D:\llama-b8069-cuda-13.1-x64\llama-tokenize.exe]]
 
 -- helper function to construct default params for llama-server,
 -- trying to best fit models into VRAM and maximize performance, effective for MoE models
@@ -330,9 +330,6 @@ kimi_linear_model = {
 	},
 }
 
--- small secondary models for processing helper tasks like generating tags/summaries/search-queries
--- will be run solely on CPU/RAM without unloading primary model loaded in GPU/VRAM+CPU/RAM
-
 -- https://huggingface.co/bartowski/mistralai_Ministral-3-3B-Instruct-2512-GGUF
 ministral_3_3b_instruct_gguf = [[C:\Mistral\mistralai_Ministral-3-3B-Instruct-2512-Q4_K_L.gguf]]
 
@@ -342,8 +339,7 @@ function get_ministral_3_instr_args(gguf, ctx_sz, ub, b, ctk, ctv)
 end
 
 ministral_3_3b_instruct_model = {
-	engine = presets.engines.llamacpp_secondary,
-	engine_idle_timeout = 10.0,
+	engine = presets.engines.llamacpp,
 	name = "ministral-3-3b-instruct",
 	connect = llama_url,
 	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", ministral_3_3b_instruct_gguf }, extra_tokens_per_message = 8, extra_tokens = 550 },
@@ -357,19 +353,41 @@ ministral_3_3b_instruct_model = {
 	},
 }
 
+-- define llama config for secondary models for processing small aux tasks.
+-- intended to be run on CPU/RAM without unloading primary models if they are already loaded
+
+llama_aux_port=7779
+llama_aux_url="http://"..llama_host..":"..llama_aux_port
+
+-- generic args for aux llama-server
+llama_aux_args = {
+	"--host", tostring(llama_host),
+	"--port", tostring(llama_aux_port),
+	"--no-warmup",
+	"--no-webui",
+	"--verbosity", "2",
+	"-cram", "0", "-np", "1",
+	"--mmap",
+}
+
+-- full path to llama binaries, download from https://github.com/ggml-org/llama.cpp/releases
+llama_aux_bin = [[D:\llama-b8069-cpu-x64\llama-server.exe]]
+llama_aux_tokenize_bin = [[D:\llama-b8069-cpu-x64\llama-tokenize.exe]]
+
 -- https://huggingface.co/Casual-Autopsy/snowflake-arctic-embed-l-v2.0-gguf/tree/main
 snowflake_arctic_embed_gguf = [[C:\Embedding\snowflake-arctic-embed-l-v2.0-f16.gguf]]
 
 function get_arctic_args(gguf)
-	return concat_arrays(llama_default_args,{"--embedding", "-c", "8192", "-ub", "4096", "-b", "4096", "-fit", "on", "--fit-ctx", "8192", "--fit-target", "256", "-m", gguf})
+	return concat_arrays(llama_aux_args,{"--embedding", "-c", "8192", "-ub", "4096", "-b", "4096", "-m", gguf})
 end
 
 snowflake_arctic_embed_model = {
 	engine = presets.engines.llamacpp_secondary,
+	engine_idle_timeout = 10.0,
 	name = "snowflake-arctic-embed",
-	connect = llama_url,
+	connect = llama_aux_url,
 	variants = {
-		{ binary = llama_bin, args = get_arctic_args(snowflake_arctic_embed_gguf), context = 8192 },
+		{ binary = llama_aux_bin, args = get_arctic_args(snowflake_arctic_embed_gguf), context = 8192 },
 	},
 }
 
