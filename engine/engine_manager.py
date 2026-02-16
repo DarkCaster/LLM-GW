@@ -29,9 +29,8 @@ class EngineManager:
             session: aiohttp.ClientSession, session used
             cfg: PyLuaHelper configuration object
         """
-        self.logger = logger.get_logger(self.__class__.__name__)
-        self.session = session
-        self.cfg = cfg
+        self._session = session
+        self._cfg = cfg
         self._is_disposed = False
         # Engine state
         self._current_engine_process: EngineProcess | None = None
@@ -40,6 +39,7 @@ class EngineManager:
         self._current_config: Dict[str, Any] | None = None
         self._current_engine_type: str | None = None
         self._current_idle_timeout: float = sys.float_info.max
+        self.logger = logger.get_logger(self.__class__.__name__)
         self.logger.info("EngineManager initialized")
 
     def _check_model_configuration(
@@ -69,8 +69,8 @@ class EngineManager:
 
     def _get_model_index(self, model_name: str, raise_if_not_found: bool) -> int:
         model_index = None
-        for i in self.cfg.get_table_seq("models"):
-            if self.cfg.get(f"models.{i}.name") == model_name:
+        for i in self._cfg.get_table_seq("models"):
+            if self._cfg.get(f"models.{i}.name") == model_name:
                 model_index = i
                 break
         if model_index is None:
@@ -114,7 +114,7 @@ class EngineManager:
                     self.logger.error("Internal error!")
                     return False
                 # get `context` value from cfg (with fallback 0), compare with context_required return false if context value is smaller
-                current_context = self.cfg.get_int(
+                current_context = self._cfg.get_int(
                     f"models.{model_index}.variants.{variant_index}.context", 0
                 )
                 if current_context < context_required:
@@ -146,19 +146,19 @@ class EngineManager:
         # Find model in configuration
         model_index = self._get_model_index(model_name, True)
         # Get engine type for the model
-        cfg_engine_type = self.cfg.get(f"models.{model_index}.engine")
+        cfg_engine_type = self._cfg.get(f"models.{model_index}.engine")
         # NOTE: engine specifig setup here:
         if cfg_engine_type == "llama.cpp":
             # Do not use standalone tokenizer if not defined
-            if self.cfg.get_type(f"models.{model_index}.tokenization") != "table":
+            if self._cfg.get_type(f"models.{model_index}.tokenization") != "table":
                 return None
             return LlamaStandaloneTokenizer(
-                self.cfg.get_int(
+                self._cfg.get_int(
                     f"models.{model_index}.tokenization.extra_tokens_per_message"
                 ),
-                self.cfg.get_int(f"models.{model_index}.tokenization.extra_tokens"),
-                self.cfg.get(f"models.{model_index}.tokenization.binary"),
-                self.cfg.get_list(f"models.{model_index}.tokenization.final_args"),
+                self._cfg.get_int(f"models.{model_index}.tokenization.extra_tokens"),
+                self._cfg.get(f"models.{model_index}.tokenization.binary"),
+                self._cfg.get_list(f"models.{model_index}.tokenization.final_args"),
             )
         else:
             raise ValueError(f"Engine type '{cfg_engine_type}' not supported.")
@@ -198,14 +198,14 @@ class EngineManager:
         # Find model in configuration
         model_index = self._get_model_index(model_name, True)
         # Get engine type for the model
-        cfg_engine_type = self.cfg.get(f"models.{model_index}.engine")
+        cfg_engine_type = self._cfg.get(f"models.{model_index}.engine")
         # NOTE: engine specifig setup here:
         if cfg_engine_type == "llama.cpp":
             # Iterate over model's variants and select first suitable variant
             context_required = required_config.get("context_size_required", sys.maxsize)
             variant_index = None
-            for i in self.cfg.get_table_seq(f"models.{model_index}.variants"):
-                variant_context = self.cfg.get_int(
+            for i in self._cfg.get_table_seq(f"models.{model_index}.variants"):
+                variant_context = self._cfg.get_int(
                     f"models.{model_index}.variants.{i}.context", 0
                 )
                 if variant_context >= context_required:
@@ -276,30 +276,30 @@ class EngineManager:
                 raise ValueError("variant_index not specified in required_config")
             # Extract binary, args, and connect URL
             variant_key = f"models.{model_index}.variants.{variant_index}"
-            binary = self.cfg.get(f"{variant_key}.binary")
+            binary = self._cfg.get(f"{variant_key}.binary")
             if not binary:
                 raise ValueError(f"Binary path not found for variant {variant_index}")
-            connect_url = self.cfg.get(f"{variant_key}.connect")
+            connect_url = self._cfg.get(f"{variant_key}.connect")
             if not connect_url:
                 raise ValueError(f"Connect URL not found for variant {variant_index}")
-            args = self.cfg.get_list(f"{variant_key}.args")
+            args = self._cfg.get_list(f"{variant_key}.args")
             self.logger.debug(
                 f"Starting engine: binary={binary}, connect={connect_url}, "
                 f"args count={len(args)}"
             )
             # Get timeouts
-            engine_startup_timeout = self.cfg.get_float(
+            engine_startup_timeout = self._cfg.get_float(
                 f"{variant_key}.engine_startup_timeout"
             )
-            health_check_timeout = self.cfg.get_float(
+            health_check_timeout = self._cfg.get_float(
                 f"{variant_key}.health_check_timeout"
             )
-            engine_idle_timeout = self.cfg.get_float(
+            engine_idle_timeout = self._cfg.get_float(
                 f"{variant_key}.engine_idle_timeout"
             )
             # Create and start EngineProcess
             engine_client = LlamaCppEngineClient(
-                self.session, connect_url, health_check_timeout
+                self._session, connect_url, health_check_timeout
             )
             workdir = os.path.dirname(os.path.abspath(binary))
             engine_process = EngineProcess(binary, args, workdir)
