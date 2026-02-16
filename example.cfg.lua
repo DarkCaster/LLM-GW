@@ -94,8 +94,8 @@ llama_default_args = {
 }
 
 -- full path to llama binaries, download from https://github.com/ggml-org/llama.cpp/releases
-llama_bin = [[C:\llama-b7940-cuda-13.1-x64\llama-server.exe]]
-llama_tokenize_bin = [[C:\llama-b7940-cuda-13.1-x64\llama-tokenize.exe]]
+llama_bin = [[D:\llama-b8054-cuda-13.1-x64\llama-server.exe]]
+llama_tokenize_bin = [[D:\llama-b8054-cuda-13.1-x64\llama-tokenize.exe]]
 
 -- helper function to construct default params for llama-server,
 -- trying to best fit models into VRAM and maximize performance, effective for MoE models
@@ -262,30 +262,6 @@ qwen3_30b_coder_model = {
 	},
 }
 
--- small auxiliary model for processing helper tasks like generating tags/summaries/search-queries
--- https://huggingface.co/bartowski/mistralai_Ministral-3-3B-Instruct-2512-GGUF
-ministral_3_3b_instruct_gguf = [[C:\Mistral\mistralai_Ministral-3-3B-Instruct-2512-Q4_K_L.gguf]]
-
-function get_ministral_3_instr_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
-	return concat_arrays(args, {"--jinja", "--temp", "0.1", "--top-k", "20"})
-end
-
-ministral_3_3b_instruct_model = {
-	engine = presets.engines.llamacpp,
-	name = "ministral-3-3b-instruct",
-	connect = llama_url,
-	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", ministral_3_3b_instruct_gguf }, extra_tokens_per_message = 8, extra_tokens = 550 },
-	variants = {
-		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,20480,2048,2048), context = 20480 },
-		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,40960,1024,2048), context = 40960 },
-		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,61440,1024,2048,"q8_0","q8_0"), context = 61440 },
-		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,81920,512,2048,"q8_0","q8_0"), context = 81920 },
-		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,102400,512,2048,"q8_0","q8_0"), context = 102400 },
-		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,122880,512,2048,"q8_0","q8_0"), context = 122880 },
-	},
-}
-
 -- https://huggingface.co/unsloth/GLM-4.7-Flash-GGUF
 glm_47_flash_gguf = [[C:\GLM\GLM-4.7-Flash-UD-Q5_K_XL.gguf]]
 
@@ -354,6 +330,33 @@ kimi_linear_model = {
 	},
 }
 
+-- small secondary models for processing helper tasks like generating tags/summaries/search-queries
+-- will be run solely on CPU/RAM without unloading primary model loaded in GPU/VRAM+CPU/RAM
+
+-- https://huggingface.co/bartowski/mistralai_Ministral-3-3B-Instruct-2512-GGUF
+ministral_3_3b_instruct_gguf = [[C:\Mistral\mistralai_Ministral-3-3B-Instruct-2512-Q4_K_L.gguf]]
+
+function get_ministral_3_instr_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	local args = get_llama_args(gguf, ctx_sz, ub, b, ctk, ctv)
+	return concat_arrays(args, {"--jinja", "--temp", "0.1", "--top-k", "20"})
+end
+
+ministral_3_3b_instruct_model = {
+	engine = presets.engines.llamacpp_secondary,
+	engine_idle_timeout = 10.0,
+	name = "ministral-3-3b-instruct",
+	connect = llama_url,
+	tokenization = { binary = llama_tokenize_bin, extra_args = { "-m", ministral_3_3b_instruct_gguf }, extra_tokens_per_message = 8, extra_tokens = 550 },
+	variants = {
+		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,20480,2048,2048), context = 20480 },
+		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,40960,1024,2048), context = 40960 },
+		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,61440,1024,2048,"q8_0","q8_0"), context = 61440 },
+		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,81920,512,2048,"q8_0","q8_0"), context = 81920 },
+		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,102400,512,2048,"q8_0","q8_0"), context = 102400 },
+		{ binary = llama_bin, args = get_ministral_3_instr_args(ministral_3_3b_instruct_gguf,122880,512,2048,"q8_0","q8_0"), context = 122880 },
+	},
+}
+
 -- https://huggingface.co/Casual-Autopsy/snowflake-arctic-embed-l-v2.0-gguf/tree/main
 snowflake_arctic_embed_gguf = [[C:\Embedding\snowflake-arctic-embed-l-v2.0-f16.gguf]]
 
@@ -362,7 +365,7 @@ function get_arctic_args(gguf)
 end
 
 snowflake_arctic_embed_model = {
-	engine = presets.engines.llamacpp,
+	engine = presets.engines.llamacpp_secondary,
 	name = "snowflake-arctic-embed",
 	connect = llama_url,
 	variants = {
